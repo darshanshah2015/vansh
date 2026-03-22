@@ -1,29 +1,15 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import * as d3 from 'd3';
-
-const LINE_STYLES: Record<string, { stroke: string; strokeDasharray: string }> = {
-  parent_child: { stroke: '#2E7D32', strokeDasharray: '' },
-  spouse: { stroke: '#F9A825', strokeDasharray: '' },
-  step_parent_child: { stroke: '#6B7A6B', strokeDasharray: '8 4' },
-  adoptive_parent_child: { stroke: '#6B7A6B', strokeDasharray: '4 4' },
-  half_sibling: { stroke: '#2E7D32', strokeDasharray: '4 2' },
-};
-
-interface PersonNode {
-  id: string;
-  firstName: string;
-  lastName: string;
-  gender: string;
-  isAlive: boolean;
-  photoKey: string | null;
-}
-
-interface RelationshipEdge {
-  id: string;
-  personId1: string;
-  personId2: string;
-  relationshipType: string;
-}
+import { buildFamilyHierarchy, buildLineageHierarchy, type PersonNode, type RelationshipEdge, type CoupleNode } from '../utils/treeLayout';
+import {
+  renderCoupleNode,
+  drawParentChildLinksVertical,
+  drawParentChildLinksHorizontal,
+  drawRadialLink,
+  CARD_W,
+  CARD_H,
+  COUPLE_GAP,
+} from '../utils/treeRenderer';
 
 type ViewMode = 'radial' | 'top-down' | 'left-right';
 
@@ -32,147 +18,227 @@ interface TreeCanvasProps {
   relationships: RelationshipEdge[];
   viewMode: ViewMode;
   selectedPersonId?: string | null;
+  focusPersonId?: string | null;
   onPersonClick?: (id: string) => void;
+  onNavigateToFamily?: (personId: string) => void;
 }
 
-export function TreeCanvas({ persons, relationships, viewMode, selectedPersonId, onPersonClick }: TreeCanvasProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+export interface TreeCanvasHandle {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+}
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (svgRef.current?.parentElement) {
-        setDimensions({
-          width: svgRef.current.parentElement.clientWidth,
-          height: svgRef.current.parentElement.clientHeight,
+export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
+  function TreeCanvas({ persons, relationships, viewMode, selectedPersonId, focusPersonId, onPersonClick, onNavigateToFamily }, ref) {
+    const svgRef = useRef<SVGSVGElement>(null);
+    const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const initialTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
+    const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+    useImperativeHandle(ref, () => ({
+      zoomIn() {
+        if (!svgRef.current || !zoomRef.current) return;
+        d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.4);
+      },
+      zoomOut() {
+        if (!svgRef.current || !zoomRef.current) return;
+        d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.7);
+      },
+      resetView() {
+        if (!svgRef.current || !zoomRef.current) return;
+        d3.select(svgRef.current).transition().duration(500).call(zoomRef.current.transform, initialTransformRef.current);
+      },
+    }));
+
+    useEffect(() => {
+      const handleResize = () => {
+        if (svgRef.current?.parentElement) {
+          setDimensions({
+            width: svgRef.current.parentElement.clientWidth,
+            height: svgRef.current.parentElement.clientHeight,
+          });
+        }
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const render = useCallback(() => {
+      if (!svgRef.current || persons.length === 0) return;
+
+      const svg = d3.select(svgRef.current);
+      svg.selectAll('*').remove();
+      const { width, height } = dimensions;
+      const g = svg.append('g');
+
+      // Auto-select focus: claimed person or person with most descendants
+      let effectiveFocus = focusPersonId;
+      if (!effectiveFocus) {
+        const claimed = persons.find((p) => p.claimedByUserId);
+        effectiveFocus = claimed?.id ?? null;
+      }
+
+      // Build couple-node hierarchy — always lineage-focused
+      const familyRoot = effectiveFocus
+        ? buildLineageHierarchy(persons, relationships, effectiveFocus)
+        : buildFamilyHierarchy(persons, relationships);
+      const root = d3.hierarchy(familyRoot, (d) => d.children ?? undefined);
+
+      // Couple node width for separation
+      const coupleWidth = (d: d3.HierarchyNode<CoupleNode>) =>
+        d.data.spouse ? CARD_W * 2 + COUPLE_GAP : CARD_W;
+
+      // Node positions
+      const nodePositions = new Map<string, { x: number; y: number }>();
+
+      if (viewMode === 'radial') {
+        const radius = Math.max(120, root.descendants().length * 50);
+        const layout = d3.tree<CoupleNode>().size([2 * Math.PI, radius])
+          .separation((a, b) => {
+            const wa = a.data.spouse ? 1.8 : 1;
+            const wb = b.data.spouse ? 1.8 : 1;
+            return (wa + wb) / 2 / (a.parent === b.parent ? 1 : 1.5);
+          });
+        layout(root);
+        root.descendants().forEach((d) => {
+          nodePositions.set(d.data.id, {
+            x: d.y * Math.cos(d.x - Math.PI / 2),
+            y: d.y * Math.sin(d.x - Math.PI / 2),
+          });
+        });
+      } else if (viewMode === 'left-right') {
+        const layout = d3.tree<CoupleNode>().nodeSize([CARD_H + 40, 280])
+          .separation((a, b) => {
+            const wa = a.data.spouse ? 1.4 : 1;
+            const wb = b.data.spouse ? 1.4 : 1;
+            return (wa + wb) / 2;
+          });
+        layout(root);
+        root.descendants().forEach((d) => {
+          nodePositions.set(d.data.id, { x: d.y, y: d.x });
+        });
+      } else {
+        // top-down
+        const layout = d3.tree<CoupleNode>().nodeSize([CARD_W * 2 + 40, CARD_H + 60])
+          .separation((a, b) => {
+            const wa = a.data.spouse ? 1.4 : 1;
+            const wb = b.data.spouse ? 1.4 : 1;
+            return (wa + wb) / 2;
+          });
+        layout(root);
+        root.descendants().forEach((d) => {
+          nodePositions.set(d.data.id, { x: d.x, y: d.y });
         });
       }
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
-  useEffect(() => {
-    if (!svgRef.current || persons.length === 0) return;
+      const isVirtual = (id: string) => id === 'virtual-root';
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
-    const { width, height } = dimensions;
-    const g = svg.append('g');
-
-    const parentChildRels = relationships.filter((r) => r.relationshipType === 'parent_child');
-    const childIds = new Set(parentChildRels.map((r) => r.personId2));
-    const roots = persons.filter((p) => !childIds.has(p.id));
-    const rootId = roots.length > 0 ? roots[0].id : persons[0]?.id;
-
-    const childrenMap = new Map<string, string[]>();
-    parentChildRels.forEach((r) => {
-      if (!childrenMap.has(r.personId1)) childrenMap.set(r.personId1, []);
-      childrenMap.get(r.personId1)!.push(r.personId2);
-    });
-
-    const personMap = new Map(persons.map((p) => [p.id, p]));
-    const visited = new Set<string>();
-
-    function buildHierarchy(id: string): any {
-      if (visited.has(id)) return null;
-      visited.add(id);
-      const person = personMap.get(id);
-      if (!person) return null;
-      const ch = (childrenMap.get(id) || []).map((cid) => buildHierarchy(cid)).filter(Boolean);
-      return { ...person, children: ch.length > 0 ? ch : undefined };
-    }
-
-    let hierarchyData = buildHierarchy(rootId);
-    if (!hierarchyData) hierarchyData = { ...persons[0], children: undefined };
-    const unvisited = persons.filter((p) => !visited.has(p.id));
-    if (unvisited.length > 0 && hierarchyData) {
-      if (!hierarchyData.children) hierarchyData.children = [];
-      unvisited.forEach((p) => hierarchyData.children.push({ ...p }));
-    }
-
-    const root = d3.hierarchy(hierarchyData);
-    const nodePositions = new Map<string, { x: number; y: number }>();
-
-    if (viewMode === 'radial') {
-      const layout = d3.tree<any>().size([2 * Math.PI, Math.min(width, height) / 3]);
-      layout(root);
-      root.descendants().forEach((d: any) => {
-        nodePositions.set(d.data.id, {
-          x: width / 2 + d.y * Math.cos(d.x - Math.PI / 2),
-          y: height / 2 + d.y * Math.sin(d.x - Math.PI / 2),
-        });
+      // Build person ID → couple center (for parent source) and individual card position (for child target)
+      const personCoupleCenter = new Map<string, { x: number; y: number }>();
+      const personCardCenter = new Map<string, { x: number; y: number }>();
+      const cardOffset = (CARD_W + COUPLE_GAP) / 2;
+      root.descendants().forEach((d) => {
+        if (isVirtual(d.data.id)) return;
+        const pos = nodePositions.get(d.data.id);
+        if (!pos) return;
+        personCoupleCenter.set(d.data.primary.id, pos);
+        if (d.data.spouse) {
+          personCoupleCenter.set(d.data.spouse.id, pos);
+          personCardCenter.set(d.data.primary.id, { x: pos.x - cardOffset, y: pos.y });
+          personCardCenter.set(d.data.spouse.id, { x: pos.x + cardOffset, y: pos.y });
+        } else {
+          personCardCenter.set(d.data.primary.id, pos);
+        }
       });
-    } else if (viewMode === 'left-right') {
-      const layout = d3.tree<any>().size([height - 100, width - 200]);
-      layout(root);
-      root.descendants().forEach((d: any) => {
-        nodePositions.set(d.data.id, { x: d.y + 100, y: d.x + 50 });
-      });
-    } else {
-      const layout = d3.tree<any>().size([width - 200, height - 100]);
-      layout(root);
-      root.descendants().forEach((d: any) => {
-        nodePositions.set(d.data.id, { x: d.x + 100, y: d.y + 50 });
-      });
-    }
 
-    const edgesG = g.append('g');
-    relationships.forEach((rel) => {
-      const p1 = nodePositions.get(rel.personId1);
-      const p2 = nodePositions.get(rel.personId2);
-      if (!p1 || !p2) return;
-      const style = LINE_STYLES[rel.relationshipType] || LINE_STYLES.parent_child;
-      edgesG.append('line').attr('x1', p1.x).attr('y1', p1.y).attr('x2', p2.x).attr('y2', p2.y)
-        .attr('stroke', style.stroke).attr('stroke-width', 2)
-        .attr('stroke-dasharray', style.strokeDasharray).attr('opacity', 0.7);
-    });
+      // Draw ALL parent→child links from raw relationship data
+      // Group by parent couple center → child individual card positions
+      const linksG = g.append('g');
+      const parentChildRels = relationships.filter((r) => r.relationshipType === 'parent_child');
 
-    const nodesG = g.append('g');
-    persons.forEach((person, i) => {
-      const pos = nodePositions.get(person.id);
-      if (!pos) return;
-      const nodeG = nodesG.append('g').attr('transform', `translate(${pos.x},${pos.y})`)
-        .attr('cursor', 'pointer')
-        .attr('role', 'button')
-        .attr('tabindex', '0')
-        .attr('aria-label', `${person.firstName} ${person.lastName}`)
-        .on('click', () => onPersonClick?.(person.id))
-        .on('keydown', (event: KeyboardEvent) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onPersonClick?.(person.id);
-          }
+      // Group: "parentCoupleKey" → Set of child card positions
+      const parentToChildren = new Map<string, Set<string>>();
+      const posKey = (p: { x: number; y: number }) => `${p.x},${p.y}`;
+
+      parentChildRels.forEach((rel) => {
+        const parentPos = personCoupleCenter.get(rel.personId1);
+        const childPos = personCardCenter.get(rel.personId2);
+        if (!parentPos || !childPos) return;
+        const pk = posKey(parentPos);
+        const ck = posKey(childPos);
+        if (pk === ck) return; // Same couple node, skip
+        if (!parentToChildren.has(pk)) parentToChildren.set(pk, new Set());
+        parentToChildren.get(pk)!.add(ck);
+      });
+
+      // Draw T-junction for each parent → children group
+      parentToChildren.forEach((childKeys, parentKey) => {
+        const [px, py] = parentKey.split(',').map(Number);
+        const childPositions = [...childKeys].map((ck) => {
+          const [cx, cy] = ck.split(',').map(Number);
+          return { x: cx, y: cy };
         });
 
-      const isSelected = person.id === selectedPersonId;
-      const fill = person.gender === 'male' ? '#DBEAFE' : person.gender === 'female' ? '#FCE7F3' : '#F3F4F6';
-      nodeG.append('circle').attr('r', 22).attr('fill', fill)
-        .attr('stroke', isSelected ? '#2E7D32' : '#E0E4DD')
-        .attr('stroke-width', isSelected ? 3 : 1.5)
-        .attr('opacity', person.isAlive ? 1 : 0.5);
+        if (viewMode === 'radial') {
+          childPositions.forEach((cp) => {
+            drawRadialLink(linksG as any, px, py, cp.x, cp.y);
+          });
+        } else if (viewMode === 'left-right') {
+          drawParentChildLinksHorizontal(linksG as any, { x: px, y: py }, childPositions, CARD_W);
+        } else {
+          drawParentChildLinksVertical(linksG as any, { x: px, y: py }, childPositions);
+        }
+      });
 
-      nodeG.append('text').attr('text-anchor', 'middle').attr('dy', '0.35em')
-        .attr('font-size', '11px').attr('font-weight', '500').attr('fill', '#1B2118')
-        .text(`${person.firstName[0]}${person.lastName[0]}`);
+      // Draw nodes (skip virtual root)
+      const nodesG = g.append('g');
+      root.descendants().forEach((d) => {
+        if (isVirtual(d.data.id)) return;
+        const pos = nodePositions.get(d.data.id);
+        if (!pos) return;
+        renderCoupleNode(nodesG as any, d.data, pos.x, pos.y, selectedPersonId, onPersonClick, onNavigateToFamily, focusPersonId);
+      });
 
-      nodeG.append('text').attr('text-anchor', 'middle').attr('dy', '38px')
-        .attr('font-size', '10px').attr('fill', '#6B7A6B').text(person.firstName);
-    });
+      // Zoom
+      const zoom = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 5])
+        .on('zoom', (event) => g.attr('transform', event.transform.toString()));
+      zoomRef.current = zoom;
+      svg.call(zoom);
 
-    const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.2, 4])
-      .on('zoom', (event) => g.attr('transform', event.transform.toString()));
-    svg.call(zoom);
+      // Auto-fit
+      const bounds = g.node()?.getBBox();
+      if (bounds && bounds.width > 0 && bounds.height > 0) {
+        const padding = 60;
+        const scale = Math.min(
+          width / (bounds.width + padding * 2),
+          height / (bounds.height + padding * 2),
+          1.5
+        );
+        const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
+        const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+        initialTransformRef.current = transform;
+        svg.call(zoom.transform, transform);
+      }
+    }, [persons, relationships, viewMode, selectedPersonId, focusPersonId, onPersonClick, onNavigateToFamily, dimensions]);
 
-    const bounds = g.node()?.getBBox();
-    if (bounds) {
-      const scale = Math.min(width / (bounds.width + 80), height / (bounds.height + 80), 1.5);
-      const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
-      const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
-      svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
-    }
-  }, [persons, relationships, viewMode, selectedPersonId, onPersonClick, dimensions]);
+    useEffect(() => {
+      render();
+    }, [render]);
 
-  return <svg ref={svgRef} width="100%" height="100%" className="bg-background" style={{ touchAction: 'none' }} role="tree" aria-label="Family tree visualization" />;
-}
+    return (
+      <svg
+        ref={svgRef}
+        width="100%"
+        height="100%"
+        className="bg-background"
+        style={{ touchAction: 'none' }}
+        role="tree"
+        aria-label="Family tree visualization"
+      />
+    );
+  }
+);

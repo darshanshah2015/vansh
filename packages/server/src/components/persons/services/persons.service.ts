@@ -7,6 +7,12 @@ import * as notificationService from '../../../shared/services/notification.serv
 import * as matchingService from '../../../shared/services/matching.service';
 
 async function verifyTreeMember(treeId: string, userId: string) {
+  // Admins can access any tree
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+  if (user?.role === 'admin') return;
+
   const member = await db.query.treeMembers.findFirst({
     where: and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)),
   });
@@ -171,7 +177,7 @@ export async function listPersonsByTree(slug: string, page: number, limit: numbe
 
   const offset = (page - 1) * limit;
 
-  const [items, [{ total }]] = await Promise.all([
+  const [items, [{ total }], treeRelationships] = await Promise.all([
     db
       .select()
       .from(persons)
@@ -180,10 +186,25 @@ export async function listPersonsByTree(slug: string, page: number, limit: numbe
       .offset(offset)
       .orderBy(persons.lastName),
     db.select({ total: count() }).from(persons).where(eq(persons.treeId, tree.id)),
+    db.select().from(relationships).where(eq(relationships.treeId, tree.id)),
   ]);
 
+  // Build a map of person ID → their relationships
+  const relsByPerson = new Map<string, typeof treeRelationships>();
+  treeRelationships.forEach((r) => {
+    if (!relsByPerson.has(r.personId1)) relsByPerson.set(r.personId1, []);
+    relsByPerson.get(r.personId1)!.push(r);
+    if (!relsByPerson.has(r.personId2)) relsByPerson.set(r.personId2, []);
+    relsByPerson.get(r.personId2)!.push(r);
+  });
+
+  const itemsWithRels = items.map((p) => ({
+    ...p,
+    relationships: relsByPerson.get(p.id) ?? [],
+  }));
+
   return {
-    items,
+    items: itemsWithRels,
     pagination: {
       page,
       limit,

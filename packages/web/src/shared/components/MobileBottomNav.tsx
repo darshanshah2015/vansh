@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, TreePine, Search, Bell, User } from 'lucide-react';
+import { Home, TreePine, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMyTree } from '@/shared/hooks/useMyTree';
 
@@ -11,8 +11,6 @@ export function MobileBottomNav() {
     { to: '/trees', label: 'Home', icon: Home },
     { to: myTreePath, label: 'My Tree', icon: TreePine },
     { to: '/search', label: 'Search', icon: Search },
-    { to: '/notifications', label: 'Alerts', icon: Bell },
-    { to: '/profile', label: 'Profile', icon: User },
   ];
 
   return (

@@ -44,7 +44,8 @@ export function renderPersonCard(
   parent: d3.Selection<SVGGElement, unknown, null, undefined>,
   person: PersonNode,
   isSelected: boolean,
-  onClick?: (id: string) => void
+  onClick?: (id: string) => void,
+  isHighlighted?: boolean
 ): d3.Selection<SVGGElement, unknown, null, undefined> {
   const g = parent.append('g')
     .attr('cursor', 'pointer')
@@ -62,6 +63,29 @@ export function renderPersonCard(
   const accent = GENDER_ACCENT[person.gender] ?? GENDER_ACCENT.other;
   const bg = GENDER_BG[person.gender] ?? GENDER_BG.other;
   const opacity = person.isAlive ? 1 : 0.6;
+
+  // Highlight glow when navigated to — finite transition chain, no setTimeout
+  if (isHighlighted) {
+    const glow = g.append('rect')
+      .attr('x', -CARD_W / 2 - 4)
+      .attr('y', -CARD_H / 2 - 4)
+      .attr('width', CARD_W + 8)
+      .attr('height', CARD_H + 8)
+      .attr('rx', CARD_R + 2)
+      .attr('fill', 'none')
+      .attr('stroke', '#F9A825')
+      .attr('stroke-width', 3)
+      .attr('opacity', 1);
+
+    // 3 pulses (800ms each way × 3 = ~4.8s) then fade out and remove
+    glow.transition().duration(800).attr('opacity', 0.3)
+      .transition().duration(800).attr('opacity', 1)
+      .transition().duration(800).attr('opacity', 0.3)
+      .transition().duration(800).attr('opacity', 1)
+      .transition().duration(800).attr('opacity', 0.3)
+      .transition().duration(800).attr('opacity', 1)
+      .transition().duration(600).attr('opacity', 0).remove();
+  }
 
   // Card background
   g.append('rect')
@@ -152,7 +176,9 @@ export function renderCoupleNode(
   cx: number,
   cy: number,
   selectedPersonId: string | null | undefined,
-  onClick?: (id: string) => void
+  onClick?: (id: string) => void,
+  onNavigateToFamily?: (id: string) => void,
+  highlightPersonId?: string | null
 ) {
   const g = parent.append('g').attr('transform', `translate(${cx},${cy})`);
 
@@ -178,33 +204,274 @@ export function renderCoupleNode(
       .attr('opacity', 0.8);
 
     const leftG = g.append('g').attr('transform', `translate(${-offset},0)`);
-    renderPersonCard(leftG, node.primary, node.primary.id === selectedPersonId, onClick);
+    renderPersonCard(leftG, node.primary, node.primary.id === selectedPersonId, onClick, node.primary.id === highlightPersonId);
 
     const rightG = g.append('g').attr('transform', `translate(${offset},0)`);
-    renderPersonCard(rightG, node.spouse, node.spouse.id === selectedPersonId, onClick);
+    renderPersonCard(rightG, node.spouse, node.spouse.id === selectedPersonId, onClick, node.spouse.id === highlightPersonId);
+
+    // "View Family" button below spouse card if navigable
+    if (node.spouseIsNavigable && node.spouseLineageId && onNavigateToFamily) {
+      const btnW = CARD_W - 8;
+      const btnH = 20;
+      const btnY = CARD_H / 2 + 4;
+      const navG = rightG.append('g')
+        .attr('transform', `translate(0, ${btnY})`)
+        .attr('cursor', 'pointer')
+        .attr('role', 'button')
+        .attr('tabindex', '0')
+        .attr('aria-label', `View ${node.spouse.firstName}'s family`)
+        .on('click', (event: MouseEvent) => {
+          event.stopPropagation();
+          onNavigateToFamily(node.spouseLineageId!);
+        })
+        .on('keydown', (event: KeyboardEvent) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            onNavigateToFamily(node.spouseLineageId!);
+          }
+        });
+
+      // Button background
+      navG.append('rect')
+        .attr('x', -btnW / 2)
+        .attr('y', 0)
+        .attr('width', btnW)
+        .attr('height', btnH)
+        .attr('rx', 4)
+        .attr('fill', SPOUSE_LINE_COLOR)
+        .attr('opacity', 0.12);
+
+      navG.append('rect')
+        .attr('x', -btnW / 2)
+        .attr('y', 0)
+        .attr('width', btnW)
+        .attr('height', btnH)
+        .attr('rx', 4)
+        .attr('fill', 'none')
+        .attr('stroke', SPOUSE_LINE_COLOR)
+        .attr('stroke-width', 0.8)
+        .attr('opacity', 0.4);
+
+      // Button text
+      navG.append('text')
+        .attr('x', 0)
+        .attr('y', btnH / 2)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
+        .attr('font-size', '9px')
+        .attr('font-weight', '600')
+        .attr('fill', '#B07D10')
+        .text(`${node.spouse.firstName}'s Family →`);
+    }
   } else {
-    renderPersonCard(g, node.primary, node.primary.id === selectedPersonId, onClick);
+    renderPersonCard(g, node.primary, node.primary.id === selectedPersonId, onClick, node.primary.id === highlightPersonId);
   }
 }
 
-/**
- * Renders an orthogonal elbow link for top-down layout.
- */
-export function elbowLinkVertical(sx: number, sy: number, tx: number, ty: number): string {
-  const midY = (sy + ty) / 2;
-  return `M${sx},${sy} V${midY} H${tx} V${ty}`;
-}
+// --- Link styles per relationship type ---
 
-/**
- * Renders an orthogonal elbow link for left-right layout.
- */
-export function elbowLinkHorizontal(sx: number, sy: number, tx: number, ty: number): string {
-  const midX = (sx + tx) / 2;
-  return `M${sx},${sy} H${midX} V${ty} H${tx}`;
-}
-
-export const LINK_STYLE = {
-  stroke: '#94A3B8',
-  strokeWidth: 1.5,
-  opacity: 0.6,
+export const PARENT_CHILD_LINK = {
+  stroke: '#2E7D32',
+  strokeWidth: 2,
+  opacity: 0.7,
+  strokeDasharray: '',
 };
+
+export const SIBLING_BAR = {
+  stroke: '#0EA5E9',
+  strokeWidth: 2,
+  opacity: 0.5,
+  strokeDasharray: '6 3',
+};
+
+/**
+ * Draws the T-junction parent→children links for top-down layout.
+ *
+ * Pattern:
+ *   Parent (bottom center)
+ *      |  (vertical drop)
+ *      |
+ *   ---+---+---  (horizontal sibling bar, dashed blue)
+ *   |       |
+ *   Child1  Child2  (vertical drops, solid green)
+ */
+export function drawParentChildLinksVertical(
+  linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
+  parentPos: { x: number; y: number },
+  childPositions: Array<{ x: number; y: number }>,
+) {
+  if (childPositions.length === 0) return;
+
+  const parentBottomY = parentPos.y + CARD_H / 2;
+  const midY = parentBottomY + (childPositions[0].y - CARD_H / 2 - parentBottomY) / 2;
+
+  // Vertical drop from parent to midpoint
+  linksG.append('path')
+    .attr('d', `M${parentPos.x},${parentBottomY} V${midY}`)
+    .attr('fill', 'none')
+    .attr('stroke', PARENT_CHILD_LINK.stroke)
+    .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+    .attr('stroke-linecap', 'round')
+    .attr('opacity', PARENT_CHILD_LINK.opacity);
+
+  // Horizontal bar at midY connecting parent drop point to all child x positions
+  const allXs = [parentPos.x, ...childPositions.map((c) => c.x)].sort((a, b) => a - b);
+  const minX = allXs[0];
+  const maxX = allXs[allXs.length - 1];
+  if (maxX > minX) {
+    if (childPositions.length > 1) {
+      // Sibling bar spanning all children
+      const childXs = childPositions.map((c) => c.x).sort((a, b) => a - b);
+      const sibMinX = childXs[0];
+      const sibMaxX = childXs[childXs.length - 1];
+
+      // Green connector from parent drop to sibling bar
+      if (parentPos.x < sibMinX) {
+        linksG.append('path')
+          .attr('d', `M${parentPos.x},${midY} H${sibMinX}`)
+          .attr('fill', 'none')
+          .attr('stroke', PARENT_CHILD_LINK.stroke)
+          .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+          .attr('stroke-linecap', 'round')
+          .attr('opacity', PARENT_CHILD_LINK.opacity);
+      } else if (parentPos.x > sibMaxX) {
+        linksG.append('path')
+          .attr('d', `M${sibMaxX},${midY} H${parentPos.x}`)
+          .attr('fill', 'none')
+          .attr('stroke', PARENT_CHILD_LINK.stroke)
+          .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+          .attr('stroke-linecap', 'round')
+          .attr('opacity', PARENT_CHILD_LINK.opacity);
+      }
+
+      // Blue dashed sibling bar between children
+      linksG.append('path')
+        .attr('d', `M${sibMinX},${midY} H${sibMaxX}`)
+        .attr('fill', 'none')
+        .attr('stroke', SIBLING_BAR.stroke)
+        .attr('stroke-width', SIBLING_BAR.strokeWidth)
+        .attr('stroke-linecap', 'round')
+        .attr('stroke-dasharray', SIBLING_BAR.strokeDasharray)
+        .attr('opacity', SIBLING_BAR.opacity);
+    } else {
+      // Single child offset from parent: green connector
+      linksG.append('path')
+        .attr('d', `M${minX},${midY} H${maxX}`)
+        .attr('fill', 'none')
+        .attr('stroke', PARENT_CHILD_LINK.stroke)
+        .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+        .attr('stroke-linecap', 'round')
+        .attr('opacity', PARENT_CHILD_LINK.opacity);
+    }
+  }
+
+  // Vertical drops from midY to each child
+  childPositions.forEach((cp) => {
+    linksG.append('path')
+      .attr('d', `M${cp.x},${midY} V${cp.y - CARD_H / 2}`)
+      .attr('fill', 'none')
+      .attr('stroke', PARENT_CHILD_LINK.stroke)
+      .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+      .attr('stroke-linecap', 'round')
+      .attr('opacity', PARENT_CHILD_LINK.opacity);
+  });
+}
+
+/**
+ * Draws the T-junction parent→children links for left-right layout.
+ */
+export function drawParentChildLinksHorizontal(
+  linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
+  parentPos: { x: number; y: number },
+  childPositions: Array<{ x: number; y: number }>,
+  parentCoupleWidth: number,
+) {
+  if (childPositions.length === 0) return;
+
+  const parentRightX = parentPos.x + parentCoupleWidth / 2;
+  const midX = parentRightX + (childPositions[0].x - CARD_W / 2 - parentRightX) / 2;
+
+  // Horizontal drop from parent to midpoint
+  linksG.append('path')
+    .attr('d', `M${parentRightX},${parentPos.y} H${midX}`)
+    .attr('fill', 'none')
+    .attr('stroke', PARENT_CHILD_LINK.stroke)
+    .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+    .attr('stroke-linecap', 'round')
+    .attr('opacity', PARENT_CHILD_LINK.opacity);
+
+  if (childPositions.length > 1) {
+    // Vertical sibling bar
+    const ys = childPositions.map((c) => c.y).sort((a, b) => a - b);
+    linksG.append('path')
+      .attr('d', `M${midX},${ys[0]} V${ys[ys.length - 1]}`)
+      .attr('fill', 'none')
+      .attr('stroke', SIBLING_BAR.stroke)
+      .attr('stroke-width', SIBLING_BAR.strokeWidth)
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-dasharray', SIBLING_BAR.strokeDasharray)
+      .attr('opacity', SIBLING_BAR.opacity);
+  }
+
+  // Horizontal drops from sibling bar to each child
+  childPositions.forEach((cp) => {
+    linksG.append('path')
+      .attr('d', `M${midX},${cp.y} H${cp.x - CARD_W / 2}`)
+      .attr('fill', 'none')
+      .attr('stroke', PARENT_CHILD_LINK.stroke)
+      .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+      .attr('stroke-linecap', 'round')
+      .attr('opacity', PARENT_CHILD_LINK.opacity);
+  });
+}
+
+/**
+ * Draws simple radial links (straight lines with color coding).
+ */
+export function drawRadialLink(
+  linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+) {
+  linksG.append('path')
+    .attr('d', `M${sx},${sy} L${tx},${ty}`)
+    .attr('fill', 'none')
+    .attr('stroke', PARENT_CHILD_LINK.stroke)
+    .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
+    .attr('stroke-linecap', 'round')
+    .attr('opacity', PARENT_CHILD_LINK.opacity);
+}
+
+/**
+ * Cross-link style for relationships not in the tree hierarchy
+ * (e.g., in-law parent → spouse). Drawn as a curved dashed green line.
+ */
+export const CROSS_LINK = {
+  stroke: '#2E7D32',
+  strokeWidth: 1.5,
+  opacity: 0.5,
+  strokeDasharray: '6 4',
+};
+
+export function drawCrossLink(
+  linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+) {
+  // Curved path: drop from source, curve to target
+  const midY = (sy + ty) / 2;
+  const pathD = `M${sx},${sy + CARD_H / 2} C${sx},${midY} ${tx},${midY} ${tx},${ty - CARD_H / 2}`;
+  linksG.append('path')
+    .attr('d', pathD)
+    .attr('fill', 'none')
+    .attr('stroke', CROSS_LINK.stroke)
+    .attr('stroke-width', CROSS_LINK.strokeWidth)
+    .attr('stroke-dasharray', CROSS_LINK.strokeDasharray)
+    .attr('stroke-linecap', 'round')
+    .attr('opacity', CROSS_LINK.opacity);
+}

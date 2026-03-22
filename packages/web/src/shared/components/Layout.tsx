@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { TreePine, User, LogOut, Search, Menu, HelpCircle, X, Shield } from 'lucide-react';
+import { TreePine, User, LogOut, Search, Menu, X, Shield, HelpCircle } from 'lucide-react';
 
 import { NotificationBell } from './NotificationBell';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { useMyTree } from '@/shared/hooks/useMyTree';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -14,6 +14,8 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const { myTreePath } = useMyTree();
 
   const handleLogout = async () => {
@@ -30,7 +32,18 @@ export function Layout() {
 
   useEffect(() => {
     setSidebarOpen(false);
+    setProfileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   return (
     <div className="flex h-screen flex-col md:flex-row">
@@ -50,11 +63,11 @@ export function Layout() {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="flex h-14 items-center justify-between border-b border-border px-4">
+        <div className="relative flex h-14 items-center justify-center border-b border-border px-4">
           <img src="/logo-text.png" alt="Vansh" className="h-8 w-auto" />
           <button
             onClick={() => setSidebarOpen(false)}
-            className="rounded-md p-1 hover:bg-secondary"
+            className="absolute right-3 rounded-md p-1 hover:bg-secondary"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -140,44 +153,62 @@ export function Layout() {
       {/* Main Content */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Header */}
-        <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="rounded-md p-2 hover:bg-secondary md:hidden"
-              aria-label="Toggle menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2 md:hidden">
-              <img src="/logo.png" alt="Vansh" className="h-7 w-auto" />
-            </div>
+        <header className="relative flex h-14 items-center justify-between border-b border-border bg-card px-4">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="rounded-md p-2 hover:bg-secondary md:hidden"
+            aria-label="Toggle menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="absolute left-1/2 -translate-x-1/2 md:hidden">
+            <img src="/logo-text.png" alt="Vansh" className="h-7 w-auto" />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('vansh:start-tour'));
-              }}
-              className="rounded-md p-2 hover:bg-secondary"
-              aria-label="Help"
-            >
-              <HelpCircle className="h-5 w-5" />
-            </button>
+          <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
-            <Link
-              to="/profile"
-              className="rounded-md p-2 hover:bg-secondary"
-              aria-label="Profile"
-            >
-              <User className="h-5 w-5" />
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="hidden rounded-md p-2 hover:bg-secondary md:block"
-              aria-label="Logout"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
+            <div className="relative" ref={profileRef}>
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground"
+                aria-label="Profile menu"
+              >
+                {user?.firstName?.[0]}
+                {user?.lastName?.[0]}
+              </button>
+              {profileOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-border bg-card py-1 shadow-lg">
+                  <div className="border-b border-border px-3 py-2">
+                    <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <User className="h-4 w-4" />
+                    Profile
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false);
+                      window.dispatchEvent(new CustomEvent('vansh:start-tour'));
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    Help
+                  </button>
+                  <button
+                    onClick={() => { setProfileOpen(false); handleLogout(); }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-secondary"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

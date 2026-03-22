@@ -11,7 +11,7 @@ const genderOptions = [
   { value: 'female', label: 'Female' },
   { value: 'other', label: 'Other' },
 ] as const;
-import { useAddPerson, useAddRelationship } from '../hooks/usePerson';
+import { useAddPerson, useAddRelationship, usePersonRelationships } from '../hooks/usePerson';
 import { ApiError } from '@/shared/services/api';
 
 const personSchema = z.object({
@@ -34,6 +34,7 @@ interface AddPersonFormProps {
 export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onClose }: AddPersonFormProps) {
   const addPerson = useAddPerson(treeSlug);
   const addRelationship = useAddRelationship(treeSlug);
+  const { data: existingRels } = usePersonRelationships(relatedPersonId ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -53,11 +54,40 @@ export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onC
 
       if (prefilledRelType && relatedPersonId) {
         const newPersonId = (result as any).data.id;
-        const relData =
-          prefilledRelType === 'parent_child' && relatedPersonId
-            ? { personId1: newPersonId, personId2: relatedPersonId, relationshipType: prefilledRelType }
-            : { personId1: relatedPersonId, personId2: newPersonId, relationshipType: prefilledRelType };
-        await addRelationship.mutateAsync(relData);
+        let relData;
+
+        if (prefilledRelType === 'add_parent') {
+          // New person is parent, existing person is child
+          relData = { personId1: newPersonId, personId2: relatedPersonId, relationshipType: 'parent_child' };
+        } else if (prefilledRelType === 'add_child') {
+          // Existing person is parent, new person is child
+          relData = { personId1: relatedPersonId, personId2: newPersonId, relationshipType: 'parent_child' };
+        } else if (prefilledRelType === 'add_sibling') {
+          // Add the new person as a child of the existing person's parents
+          const parentRels = (existingRels?.direct ?? []).filter(
+            (r: any) => r.relationshipType === 'parent_child' && r.personId2 === relatedPersonId
+          );
+          if (parentRels.length > 0) {
+            for (const pr of parentRels) {
+              await addRelationship.mutateAsync({
+                personId1: pr.personId1,
+                personId2: newPersonId,
+                relationshipType: 'parent_child',
+              });
+            }
+            relData = null; // Already handled
+          } else {
+            // No parents found — can't add sibling without shared parents
+            throw new Error('Cannot add sibling: no parents found for this person');
+          }
+        } else {
+          // Spouse or other: existing person → new person
+          relData = { personId1: relatedPersonId, personId2: newPersonId, relationshipType: prefilledRelType };
+        }
+
+        if (relData) {
+          await addRelationship.mutateAsync(relData);
+        }
       }
 
       onClose();
@@ -68,7 +98,7 @@ export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onC
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 md:items-center">
-      <div className="w-full max-w-md rounded-t-xl bg-card p-4 md:rounded-xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-xl bg-card p-4 pb-20 md:rounded-xl md:pb-4">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-semibold">Add Person</h2>
           <button onClick={onClose} className="rounded-md p-2 hover:bg-secondary" aria-label="Close">
