@@ -1,0 +1,1186 @@
+openapi: 3.0.3
+info:
+  title: Vansh - Family Tree API
+  description: REST API for the Vansh family tree application
+  version: 1.0.0
+servers:
+  - url: /api
+    description: API base path
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+  schemas:
+    Error:
+      type: object
+      properties:
+        type:
+          type: string
+          example: https://vansh.app/errors/not-found
+        title:
+          type: string
+          example: Not Found
+        status:
+          type: integer
+          example: 404
+        detail:
+          type: string
+          example: The requested resource was not found
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              detail:
+                type: string
+              pointer:
+                type: string
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        verificationStatus:
+          type: string
+          enum: [unverified, pending, verified, rejected]
+    Person:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        treeId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+          enum: [male, female, other]
+        dateOfBirth:
+          type: string
+          format: date-time
+          nullable: true
+        dateOfDeath:
+          type: string
+          format: date-time
+          nullable: true
+        isAlive:
+          type: boolean
+        gotra:
+          type: string
+          nullable: true
+        photoKey:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+    Tree:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        memberCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+security:
+  - cookieAuth: []
+
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Create a new account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, firstName, lastName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+      responses:
+        '201':
+          description: Account created
+        '400':
+          description: Validation error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Email already exists
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      responses:
+        '200':
+          description: Logged out
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      responses:
+        '200':
+          description: Current user info
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+
+      responses:
+        '200':
+          description: Reset token generated
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password reset
+
+  /users/profile:
+    get:
+      tags: [Users]
+      summary: Get own profile
+      responses:
+        '200':
+          description: User profile
+    patch:
+      tags: [Users]
+      summary: Update own profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated
+
+  /users/change-password:
+    post:
+      tags: [Users]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+
+  /users/verification/upload:
+    post:
+      tags: [Users]
+      summary: Upload Aadhaar for verification
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+
+  /trees:
+    get:
+      tags: [Trees]
+      summary: List trees (paginated, searchable)
+      security: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: gotra
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated tree list
+    post:
+      tags: [Trees]
+      summary: Create a new tree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Tree created
+
+  /trees/{slug}:
+    get:
+      tags: [Trees]
+      summary: Get tree by slug
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tree details
+    patch:
+      tags: [Trees]
+      summary: Update tree
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tree updated
+
+  /trees/{slug}/stats:
+    get:
+      tags: [Trees]
+      summary: Get tree statistics
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tree statistics
+
+  /trees/{slug}/activity:
+    get:
+      tags: [Trees]
+      summary: Get tree activity feed (paginated)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Activity feed
+
+  /trees/{slug}/members:
+    get:
+      tags: [Trees]
+      summary: Get tree members
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tree members list
+
+  /trees/{slug}/persons:
+    get:
+      tags: [Persons]
+      summary: List persons in a tree (paginated)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated person list
+    post:
+      tags: [Persons]
+      summary: Add person to tree
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, gender]
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                dateOfBirth:
+                  type: string
+                  format: date
+                gotra:
+                  type: string
+      responses:
+        '201':
+          description: Person created
+
+  /persons/{id}:
+    get:
+      tags: [Persons]
+      summary: Get person by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Person details
+    patch:
+      tags: [Persons]
+      summary: Update person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Person updated
+
+  /persons/{id}/relationships:
+    get:
+      tags: [Relationships]
+      summary: Get relationships for a person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Relationships list
+
+  /persons/{id}/timeline:
+    get:
+      tags: [Persons]
+      summary: Get person timeline (paginated)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Timeline events
+
+  /persons/{id}/claim:
+    post:
+      tags: [Claims]
+      summary: Claim a person node
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Claim created
+
+  /persons/{id}/photo:
+    post:
+      tags: [Persons]
+      summary: Upload person photo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Photo uploaded
+    get:
+      tags: [Persons]
+      summary: Get person photo
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Photo file
+
+  /persons/{id}/delete-request:
+    post:
+      tags: [Persons]
+      summary: Request person deletion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Deletion request created
+
+  /trees/{slug}/relationships:
+    post:
+      tags: [Relationships]
+      summary: Add relationship in a tree
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [personId1, personId2, relationshipType]
+              properties:
+                personId1:
+                  type: string
+                  format: uuid
+                personId2:
+                  type: string
+                  format: uuid
+                relationshipType:
+                  type: string
+                  enum: [parent_child, spouse, step_parent_child, adoptive_parent_child, half_sibling]
+                marriageDate:
+                  type: string
+                  format: date
+                divorceDate:
+                  type: string
+                  format: date
+      responses:
+        '201':
+          description: Relationship created
+
+  /relationships/{id}:
+    delete:
+      tags: [Relationships]
+      summary: Remove relationship
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Relationship removed
+
+  /trees/{slug}/claims:
+    get:
+      tags: [Claims]
+      summary: List claims for a tree
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated claims
+
+  /claims/my:
+    get:
+      tags: [Claims]
+      summary: Get own claims
+      responses:
+        '200':
+          description: User's claims
+
+  /claims/{id}:
+    patch:
+      tags: [Claims]
+      summary: Approve or reject a claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [approved, rejected]
+                reviewNote:
+                  type: string
+      responses:
+        '200':
+          description: Claim reviewed
+
+  /merge:
+    post:
+      tags: [Merge]
+      summary: Create merge proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceTreeId, targetTreeId]
+              properties:
+                sourceTreeId:
+                  type: string
+                  format: uuid
+                targetTreeId:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Merge proposal created
+
+  /merge/{id}:
+    get:
+      tags: [Merge]
+      summary: Get merge proposal details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Merge proposal with mappings and persons
+
+  /merge/{id}/mappings:
+    post:
+      tags: [Merge]
+      summary: Add person mapping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourcePersonId, targetPersonId]
+              properties:
+                sourcePersonId:
+                  type: string
+                  format: uuid
+                targetPersonId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Mapping added
+
+  /merge/{id}/mappings/{mappingId}:
+    delete:
+      tags: [Merge]
+      summary: Remove a mapping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mappingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Mapping removed
+
+  /merge/{id}/mappings/{mappingId}/resolve:
+    patch:
+      tags: [Merge]
+      summary: Resolve conflict for a mapping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: mappingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution:
+                  type: string
+      responses:
+        '200':
+          description: Conflict resolved
+
+  /merge/{id}/approve:
+    post:
+      tags: [Merge]
+      summary: Approve merge from one side
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [side]
+              properties:
+                side:
+                  type: string
+                  enum: [source, target]
+      responses:
+        '200':
+          description: Approval recorded
+
+  /trees/{slug}/merge-proposals:
+    get:
+      tags: [Merge]
+      summary: List merge proposals for a tree
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated merge proposals
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications (paginated)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated notifications
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notification count
+      responses:
+        '200':
+          description: Unread count
+
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Marked as read
+
+  /notifications/mark-all-read:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        '200':
+          description: All marked as read
+
+  /notifications/mark-tree-read:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications for a tree as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [treeId]
+              properties:
+                treeId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Tree notifications marked as read
+
+  /audit/{id}/revert:
+    post:
+      tags: [Audit]
+      summary: Revert an audit log change
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Change reverted
+
+  /trees/matching/search:
+    post:
+      tags: [Matching]
+      summary: Search for matching persons across trees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName]
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                dateOfBirth:
+                  type: string
+                  format: date
+                gotra:
+                  type: string
+                parentNames:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Match results with confidence scores
+
+  /trees/wizard:
+    post:
+      tags: [Trees]
+      summary: Create tree from onboarding wizard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [treeName, self]
+              properties:
+                treeName:
+                  type: string
+                self:
+                  type: object
+                parents:
+                  type: object
+                spouse:
+                  type: object
+                siblings:
+                  type: array
+      responses:
+        '201':
+          description: Tree created from wizard
+
+  /admin/dashboard:
+    get:
+      tags: [Admin]
+      summary: Get admin dashboard stats
+      responses:
+        '200':
+          description: Dashboard statistics
+
+  /admin/activity:
+    get:
+      tags: [Admin]
+      summary: Get recent platform activity
+      responses:
+        '200':
+          description: Recent audit logs
+
+  /admin/verifications:
+    get:
+      tags: [Admin]
+      summary: List verification requests (paginated)
+      responses:
+        '200':
+          description: Pending verification requests
+
+  /admin/verifications/{id}:
+    patch:
+      tags: [Admin]
+      summary: Approve or reject verification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [verified, rejected]
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Verification reviewed
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List users (paginated, searchable)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User list
+
+  /admin/users/{id}/role:
+    patch:
+      tags: [Admin]
+      summary: Change user role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Role updated
+
+  /admin/users/{id}/reset-password:
+    post:
+      tags: [Admin]
+      summary: Reset user password (returns temp password)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Temp password returned
+
+  /admin/users/{id}/status:
+    patch:
+      tags: [Admin]
+      summary: Activate or deactivate user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Status updated
+
+  /admin/trees:
+    get:
+      tags: [Admin]
+      summary: List all trees (paginated)
+      responses:
+        '200':
+          description: Tree list
+
+  /admin/deletions:
+    get:
+      tags: [Admin]
+      summary: List deletion requests (paginated)
+      responses:
+        '200':
+          description: Deletion requests
+
+  /admin/deletions/{id}:
+    patch:
+      tags: [Admin]
+      summary: Approve or reject deletion request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deletion reviewed
+
+  /admin/merges:
+    get:
+      tags: [Admin]
+      summary: List merge proposals (paginated)
+      responses:
+        '200':
+          description: Merge proposal list
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service healthy
