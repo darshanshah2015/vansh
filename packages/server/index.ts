@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { logger } from './src/shared/logger';
+import { runMigrations } from './src/shared/migrate';
 import { errorHandler } from './src/middleware/error.middleware';
 import { defaultNoCache } from './src/middleware/cache.middleware';
 import { sanitizeBody } from './src/middleware/sanitize.middleware';
@@ -61,6 +62,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 import { startScheduledJobs } from './src/shared/services/scheduler.service';
+
+try {
+  await runMigrations();
+} catch (err) {
+  logger.error({ err }, 'Database migration failed');
+  process.exit(1);
+}
 
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
