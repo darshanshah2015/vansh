@@ -72,22 +72,68 @@ async function makeMaskable(size) {
     .toBuffer();
 }
 
+async function makeStartupImage(width, height) {
+  const logoSize = Math.round(Math.min(width, height) * 0.45);
+  const trimmed = await loadTrimmedLogo();
+  const logo = await sharp(trimmed)
+    .resize({ width: logoSize, height: logoSize, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+  return sharp({
+    create: { width, height, channels: 4, background: BG },
+  })
+    .composite([{ input: logo, gravity: 'center' }])
+    .png()
+    .toBuffer();
+}
+
+const IPHONE_SPLASH_SIZES = [
+  { w: 1290, h: 2796 },
+  { w: 1179, h: 2556 },
+  { w: 1170, h: 2532 },
+  { w: 1284, h: 2778 },
+  { w: 1125, h: 2436 },
+  { w: 1242, h: 2688 },
+  { w: 828, h: 1792 },
+  { w: 750, h: 1334 },
+  { w: 640, h: 1136 },
+];
+
 async function run() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  const SPLASH_DIR = path.join(PUBLIC_DIR, 'splash');
+  fs.mkdirSync(SPLASH_DIR, { recursive: true });
 
   const icon192 = await makeSquare(192);
   const icon512 = await makeSquare(512);
   const apple180 = await makeSquare(180, 0.08);
   const maskable512 = await makeMaskable(512);
   const favicon32 = await makeSquare(32, 0.06);
+  const splashLogoRaw = await makeSquare(160, 0.05);
+  const splashLogo = await sharp(splashLogoRaw)
+    .png({ quality: 80, compressionLevel: 9, palette: true })
+    .toBuffer();
 
   fs.writeFileSync(path.join(OUT_DIR, 'icon-192x192.png'), icon192);
   fs.writeFileSync(path.join(OUT_DIR, 'icon-512x512.png'), icon512);
   fs.writeFileSync(path.join(OUT_DIR, 'icon-maskable-512x512.png'), maskable512);
   fs.writeFileSync(path.join(PUBLIC_DIR, 'apple-touch-icon.png'), apple180);
   fs.writeFileSync(path.join(PUBLIC_DIR, 'favicon-32x32.png'), favicon32);
+  fs.writeFileSync(path.join(PUBLIC_DIR, 'splash-logo.png'), splashLogo);
+
+  for (const { w, h } of IPHONE_SPLASH_SIZES) {
+    const buf = await makeStartupImage(w, h);
+    fs.writeFileSync(path.join(SPLASH_DIR, `splash-${w}x${h}.png`), buf);
+  }
+
+  const splashLogoBase64 = splashLogo.toString('base64');
+  fs.writeFileSync(
+    path.join(ROOT, 'scripts/splash-logo.base64.txt'),
+    splashLogoBase64
+  );
 
   console.log('Generated icons in', OUT_DIR);
+  console.log('Generated', IPHONE_SPLASH_SIZES.length, 'iPhone splash images');
+  console.log('splash-logo.png size:', splashLogo.length, 'bytes');
 }
 
 run().catch((err) => {

@@ -2,3 +2,4 @@ node_modules
 dist
 .env
 *.log
+scripts/splash-logo.base64.txt
