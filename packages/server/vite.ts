@@ -7,9 +7,8 @@ import { logger } from './src/shared/logger';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const PROJECT_ROOT = path.resolve(__dirname, '../..');
 const WEB_ROOT = path.resolve(__dirname, '../web');
-const DIST_PUBLIC = path.resolve(PROJECT_ROOT, 'dist/public');
+const DIST_PUBLIC = path.resolve(__dirname, 'public');
 
 export async function setupVite(app: Express): Promise<void> {
   const { createServer } = await import('vite');
