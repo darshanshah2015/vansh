@@ -63,7 +63,7 @@ function Loading() {
 function AuthRedirect({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <Loading />;
-  if (isAuthenticated) return <Navigate to="/trees" replace />;
+  if (isAuthenticated) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
 }
 
@@ -103,13 +103,22 @@ export function App() {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <OnboardingWizardPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
                   element={
                     <ProtectedRoute>
                       <Layout />
                     </ProtectedRoute>
                   }
                 >
-                  <Route path="/onboarding" element={<OnboardingWizardPage />} />
+                  <Route path="/onboarding/start" element={<OnboardingWizardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/trees" element={<TreeSearchPage />} />
                   <Route path="/trees/:slug" element={<TreeViewPage />} />

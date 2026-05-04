@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { TreeCanvas, type TreeCanvasHandle } from '../components/TreeCanvas';
 import { TreeControls } from '../components/TreeControls';
 import { TreeListView } from '../components/TreeListView';
@@ -7,6 +7,7 @@ import { TreeVisualizationContainer } from '../components/containers/TreeVisuali
 import { PersonDetailDrawer } from '@/features/persons/components/PersonDetailDrawer';
 import { useTree } from '../hooks/useTree';
 import { useTour } from '@/shared/hooks/useTour';
+import { MousePointerClick } from 'lucide-react';
 
 type ViewMode = 'radial' | 'top-down' | 'left-right';
 
@@ -17,6 +18,7 @@ interface BreadcrumbEntry {
 
 export default function TreeViewPage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: tree } = useTree(slug!);
   const { autoStartTour } = useTour();
@@ -25,14 +27,18 @@ export default function TreeViewPage() {
   const [showListView, setShowListView] = useState(false);
   const canvasRef = useRef<TreeCanvasHandle>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbEntry[]>([]);
+  const [showOnboardingHint, setShowOnboardingHint] = useState(
+    searchParams.get('tour') === '1'
+  );
 
   const focusPersonId = searchParams.get('focus');
+  const isOnboardingTour = searchParams.get('tour') === '1';
 
   useEffect(() => {
-    if (searchParams.get('tour') === '1') {
+    if (isOnboardingTour) {
       autoStartTour();
     }
-  }, [searchParams, autoStartTour]);
+  }, [isOnboardingTour, autoStartTour]);
 
   // Reset breadcrumbs when focus is cleared
   useEffect(() => {
@@ -70,6 +76,17 @@ export default function TreeViewPage() {
     }
     setSelectedPersonId(null);
   }, [setSearchParams]);
+
+  const handlePersonClick = useCallback((personId: string) => {
+    setSelectedPersonId(personId);
+    setShowOnboardingHint(false);
+  }, []);
+
+  const handleDone = useCallback(() => {
+    setSelectedPersonId(null);
+    setShowOnboardingHint(false);
+    navigate(`/trees/${slug}/overview`);
+  }, [navigate, slug]);
 
   return (
     <div className="relative flex h-[calc(100vh-3.5rem-4rem)] flex-col md:h-[calc(100vh-3.5rem)]">
@@ -109,13 +126,41 @@ export default function TreeViewPage() {
 
       <div className="relative flex-1">
         <TreeVisualizationContainer slug={slug!}>
-          {({ persons, relationships }) =>
-            showListView ? (
+          {({ persons, relationships }) => {
+            const claimedPerson = persons.find((person: any) => person.claimedByUserId);
+
+            return showListView ? (
               <div className="h-full overflow-y-auto p-4">
                 <TreeListView persons={persons} onPersonClick={setSelectedPersonId} />
               </div>
             ) : (
-              <div data-tour="tree-canvas" className="h-full">
+              <div data-tour="tree-canvas" className="relative h-full">
+                {showOnboardingHint && claimedPerson && (
+                  <div className="absolute left-4 top-4 z-10 max-w-xs rounded-md border border-primary/20 bg-background/95 p-3 shadow-lg">
+                    <div className="flex gap-2">
+                      <MousePointerClick className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Click your node</p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Select {claimedPerson.firstName} to add parents, spouse, children,
+                          or siblings from the details panel.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="absolute right-4 top-4 z-10 rounded-md border border-border bg-background/95 p-3 text-xs shadow-sm">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-1 w-8 rounded-full bg-rose-400" />
+                      <span className="font-medium text-muted-foreground">spouse</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-1 w-8 rounded-full bg-emerald-500" />
+                      <span className="font-medium text-muted-foreground">kid</span>
+                    </div>
+                  </div>
+                </div>
                 <TreeCanvas
                   ref={canvasRef}
                   persons={persons}
@@ -123,12 +168,12 @@ export default function TreeViewPage() {
                   viewMode={viewMode}
                   selectedPersonId={selectedPersonId}
                   focusPersonId={focusPersonId}
-                  onPersonClick={setSelectedPersonId}
+                  onPersonClick={handlePersonClick}
                   onNavigateToFamily={(id) => handleNavigateToFamily(id, persons)}
                 />
               </div>
-            )
-          }
+            );
+          }}
         </TreeVisualizationContainer>
 
         <TreeControls
@@ -149,6 +194,7 @@ export default function TreeViewPage() {
           treeSlug={slug!}
           onClose={() => setSelectedPersonId(null)}
           onNavigateToFamily={(id) => handleNavigateToFamily(id)}
+          onDone={handleDone}
         />
       )}
     </div>

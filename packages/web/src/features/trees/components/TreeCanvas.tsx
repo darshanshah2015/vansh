@@ -198,7 +198,16 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
         if (isVirtual(d.data.id)) return;
         const pos = nodePositions.get(d.data.id);
         if (!pos) return;
-        renderCoupleNode(nodesG as any, d.data, pos.x, pos.y, selectedPersonId, onPersonClick, onNavigateToFamily, focusPersonId);
+        renderCoupleNode(
+          nodesG as any,
+          d.data,
+          pos.x,
+          pos.y,
+          selectedPersonId,
+          onPersonClick,
+          onNavigateToFamily,
+          effectiveFocus
+        );
       });
 
       // Zoom

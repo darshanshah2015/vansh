@@ -62,6 +62,7 @@ export function buildFamilyHierarchy(
     spouseMap.set(r.personId1, r.personId2);
     spouseMap.set(r.personId2, r.personId1);
   });
+  inferCoParentsAsCouples(parentsOf, spouseMap);
 
   // Find the best root: walk up from every person to find the topmost ancestor
   function getAncestorDepth(id: string, visited: Set<string>): number {
@@ -241,6 +242,7 @@ export function buildLineageHierarchy(
     spouseMap.set(r.personId1, r.personId2);
     spouseMap.set(r.personId2, r.personId1);
   });
+  inferCoParentsAsCouples(parentsOf, spouseMap);
 
   // Step 1: Walk UP to find all ancestors of the focus person
   const lineageSet = new Set<string>();
@@ -378,4 +380,19 @@ function countLineageDescendants(
     }
   });
   return count;
+}
+
+function inferCoParentsAsCouples(
+  parentsOf: Map<string, Set<string>>,
+  spouseMap: Map<string, string>
+) {
+  parentsOf.forEach((parentIds) => {
+    const parents = [...parentIds];
+    if (parents.length !== 2) return;
+    const [parentA, parentB] = parents;
+    if (!spouseMap.has(parentA) && !spouseMap.has(parentB)) {
+      spouseMap.set(parentA, parentB);
+      spouseMap.set(parentB, parentA);
+    }
+  });
 }

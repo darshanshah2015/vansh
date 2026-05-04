@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { TreePine, User, LogOut, Search, Menu, X, Shield, HelpCircle, Download } from 'lucide-react';
+import { TreePine, User, LogOut, Search, Menu, X, Shield, HelpCircle, Download, Home } from 'lucide-react';
 
 import { NotificationBell } from './NotificationBell';
 import { useState, useEffect, useRef } from 'react';
@@ -38,6 +38,7 @@ export function Layout() {
   };
 
   const navLinks = [
+    { to: '/onboarding', label: 'Home', icon: Home },
     { to: myTreePath, label: 'My Tree', icon: TreePine },
     { to: '/trees', label: 'Browse Trees', icon: Search },
     { to: '/search', label: 'Search', icon: Search },

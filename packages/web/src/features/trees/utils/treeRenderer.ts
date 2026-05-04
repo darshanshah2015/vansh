@@ -20,7 +20,7 @@ const GENDER_BG: Record<string, string> = {
 };
 const CARD_STROKE = '#E5E7EB';
 const SELECTED_STROKE = '#2E7D32';
-const SPOUSE_LINE_COLOR = '#F9A825';
+const SPOUSE_LINE_COLOR = '#FB7185';
 
 function formatYear(dateStr?: string | null): string {
   if (!dateStr) return '';
@@ -272,17 +272,17 @@ export function renderCoupleNode(
 // --- Link styles per relationship type ---
 
 export const PARENT_CHILD_LINK = {
-  stroke: '#2E7D32',
+  stroke: '#10B981',
   strokeWidth: 2,
-  opacity: 0.7,
+  opacity: 0.75,
   strokeDasharray: '',
 };
 
 export const SIBLING_BAR = {
-  stroke: '#0EA5E9',
+  stroke: PARENT_CHILD_LINK.stroke,
   strokeWidth: 2,
-  opacity: 0.5,
-  strokeDasharray: '6 3',
+  opacity: PARENT_CHILD_LINK.opacity,
+  strokeDasharray: '',
 };
 
 /**
@@ -450,7 +450,7 @@ export function drawRadialLink(
  * (e.g., in-law parent → spouse). Drawn as a curved dashed green line.
  */
 export const CROSS_LINK = {
-  stroke: '#2E7D32',
+  stroke: '#10B981',
   strokeWidth: 1.5,
   opacity: 0.5,
   strokeDasharray: '6 4',

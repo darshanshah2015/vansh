@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, UserCheck, Pencil, Check, Loader2 } from 'lucide-react';
+import { X, UserCheck, Pencil, Check, Loader2, CheckCircle2 } from 'lucide-react';
 import { usePerson, usePersonRelationships, useUpdatePerson } from '../hooks/usePerson';
 import { PersonTimeline } from './PersonTimeline';
 import { RelationshipSlots } from './RelationshipSlots';
@@ -15,9 +15,10 @@ interface PersonDetailDrawerProps {
   treeSlug: string;
   onClose: () => void;
   onNavigateToFamily?: (personId: string) => void;
+  onDone?: () => void;
 }
 
-export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFamily }: PersonDetailDrawerProps) {
+export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFamily, onDone }: PersonDetailDrawerProps) {
   const { data: person, isLoading } = usePerson(personId);
   const { data: relationships } = usePersonRelationships(personId);
   const { user } = useAuth();
@@ -136,7 +137,7 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-24">
           {activeTab === 'details' ? (
             <div className="space-y-4">
               {editing ? (
@@ -273,6 +274,19 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
             <PersonTimeline personId={personId} />
           )}
         </div>
+
+        {onDone && (
+          <div className="sticky bottom-0 z-10 border-t border-border bg-card p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)]">
+            <button
+              type="button"
+              onClick={onDone}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Done
+            </button>
+          </div>
+        )}
       </div>
 
       {showAddPerson && (

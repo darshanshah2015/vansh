@@ -35,7 +35,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const user = await login(data.email, data.password);
-      navigate(user?.role === 'admin' ? '/admin' : '/trees');
+      navigate(user?.role === 'admin' ? '/admin' : '/onboarding');
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.errors) {
