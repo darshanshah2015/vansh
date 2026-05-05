@@ -6,10 +6,18 @@ interface RelationshipSlotsProps {
   personFirstName?: string;
   relationships: any;
   onAddFromSlot: (relType: string) => void;
+  onSelectPerson?: (personId: string) => void;
   onNavigateToFamily?: (personId: string) => void;
 }
 
-export function RelationshipSlots({ personId, personFirstName, relationships, onAddFromSlot, onNavigateToFamily }: RelationshipSlotsProps) {
+export function RelationshipSlots({
+  personId,
+  personFirstName,
+  relationships,
+  onAddFromSlot,
+  onSelectPerson,
+  onNavigateToFamily,
+}: RelationshipSlotsProps) {
   if (!relationships) return null;
 
   const direct = relationships.direct || [];
@@ -52,7 +60,7 @@ export function RelationshipSlots({ personId, personFirstName, relationships, on
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">{section.label}</h3>
           <div className="flex flex-wrap gap-2">
             {section.items.map((id: string) => (
-              <PersonMiniCard key={id} personId={id} />
+              <PersonMiniCard key={id} personId={id} onClick={() => onSelectPerson?.(id)} />
             ))}
             {section.items.length < section.max && (
               <button

@@ -6,6 +6,7 @@ export interface PersonNode {
   isAlive: boolean;
   photoKey: string | null;
   dateOfBirth?: string | null;
+  placeOfBirth?: string | null;
   dateOfDeath?: string | null;
   claimedByUserId?: string | null;
 }

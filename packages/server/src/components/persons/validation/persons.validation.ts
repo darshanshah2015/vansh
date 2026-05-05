@@ -6,6 +6,7 @@ export const createPersonSchema = z.object({
   lastName: z.string().min(1, 'Last name is required').max(100),
   gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z.coerce.date().optional(),
+  placeOfBirth: z.string().max(255).optional(),
   dateOfDeath: z.coerce.date().optional(),
   gotra: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),

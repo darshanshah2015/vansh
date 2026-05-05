@@ -26,6 +26,7 @@ const personDataSchema = z.object({
   lastName: z.string().min(1),
   gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z.coerce.date().optional(),
+  placeOfBirth: z.string().max(255).optional(),
 });
 
 export const createTreeFromWizardSchema = z.object({

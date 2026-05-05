@@ -19,6 +19,7 @@ interface Person {
   lastName: string;
   gender: string;
   dateOfBirth: string | null;
+  placeOfBirth: string | null;
   dateOfDeath: string | null;
   isAlive: boolean;
   gotra: string | null;

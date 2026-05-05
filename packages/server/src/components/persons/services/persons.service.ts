@@ -27,6 +27,7 @@ export async function addPerson(
     lastName: string;
     gender: 'male' | 'female' | 'other';
     dateOfBirth?: Date;
+    placeOfBirth?: string;
     dateOfDeath?: Date;
     gotra?: string;
     phone?: string;
@@ -51,6 +52,7 @@ export async function addPerson(
       lastName: data.lastName,
       gender: data.gender,
       dateOfBirth: data.dateOfBirth ?? null,
+      placeOfBirth: data.placeOfBirth ?? null,
       dateOfDeath: data.dateOfDeath ?? null,
       isAlive,
       gotra: data.gotra ?? null,
@@ -115,6 +117,7 @@ export async function updatePerson(
     lastName: string;
     gender: 'male' | 'female' | 'other';
     dateOfBirth: Date;
+    placeOfBirth: string;
     dateOfDeath: Date;
     gotra: string;
     phone: string;

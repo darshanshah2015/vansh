@@ -1,4 +1,4 @@
-import { eq, and, ilike, count, sql, desc } from 'drizzle-orm';
+import { eq, and, ilike, count, sql, desc, inArray } from 'drizzle-orm';
 import { db } from '@db/index';
 import { trees, treeMembers, persons, relationships, auditLogs, users } from '@db/schema/index';
 import { NotFoundError, ForbiddenError } from '../../../shared/errors/index';
@@ -13,6 +13,66 @@ function generateSlug(name: string): string {
     '-' +
     Math.random().toString(36).substring(2, 8)
   );
+}
+
+type TreeRecord = typeof trees.$inferSelect;
+type PersonRecord = typeof persons.$inferSelect;
+type RelationshipRecord = typeof relationships.$inferSelect;
+
+const GENERIC_TREE_NAME_PARTS = new Set(['family', 'vansh', 'tree']);
+
+function familyNameParts(treeName: string) {
+  return new Set(
+    treeName
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((part) => part && !GENERIC_TREE_NAME_PARTS.has(part))
+  );
+}
+
+function mainFamilyPersonIds(
+  tree: Pick<TreeRecord, 'name'>,
+  treePersons: PersonRecord[],
+  treeRelationships: RelationshipRecord[]
+) {
+  const nameParts = familyNameParts(tree.name);
+  const coreIds = new Set(
+    treePersons
+      .filter((person) => nameParts.has(person.lastName.toLowerCase()))
+      .map((person) => person.id)
+  );
+
+  if (coreIds.size === 0) {
+    return new Set(treePersons.map((person) => person.id));
+  }
+
+  const visibleIds = new Set(coreIds);
+
+  for (const rel of treeRelationships) {
+    if (rel.relationshipType !== 'parent_child') continue;
+    if (coreIds.has(rel.personId1) || coreIds.has(rel.personId2)) {
+      visibleIds.add(rel.personId1);
+      visibleIds.add(rel.personId2);
+    }
+  }
+
+  for (const rel of treeRelationships) {
+    if (rel.relationshipType !== 'spouse') continue;
+    if (visibleIds.has(rel.personId1) || visibleIds.has(rel.personId2)) {
+      visibleIds.add(rel.personId1);
+      visibleIds.add(rel.personId2);
+    }
+  }
+
+  return visibleIds;
+}
+
+function mainFamilyCount(
+  tree: Pick<TreeRecord, 'name'>,
+  treePersons: PersonRecord[],
+  treeRelationships: RelationshipRecord[]
+) {
+  return mainFamilyPersonIds(tree, treePersons, treeRelationships).size;
 }
 
 export async function createTree(data: { name: string; description?: string }, userId: string) {
@@ -53,7 +113,13 @@ export async function getTreeBySlug(slug: string) {
   const [tree] = await db.select().from(trees).where(eq(trees.slug, slug)).limit(1);
 
   if (!tree) throw new NotFoundError('Tree', slug);
-  return tree;
+
+  const [treePersons, treeRelationships] = await Promise.all([
+    db.select().from(persons).where(eq(persons.treeId, tree.id)),
+    db.select().from(relationships).where(eq(relationships.treeId, tree.id)),
+  ]);
+
+  return { ...tree, memberCount: mainFamilyCount(tree, treePersons, treeRelationships) };
 }
 
 export async function updateTree(
@@ -87,6 +153,33 @@ export async function updateTree(
   return updated;
 }
 
+export async function joinTree(slug: string, userId: string) {
+  const tree = await getTreeBySlug(slug);
+
+  const existingMember = await db.query.treeMembers.findFirst({
+    where: and(eq(treeMembers.treeId, tree.id), eq(treeMembers.userId, userId)),
+  });
+
+  if (!existingMember) {
+    await db.insert(treeMembers).values({
+      treeId: tree.id,
+      userId,
+      status: 'active',
+    });
+
+    await auditService.logChange({
+      treeId: tree.id,
+      userId,
+      action: 'create',
+      entityType: 'tree_member',
+      entityId: tree.id,
+      newValue: { name: tree.name, slug: tree.slug },
+    });
+  }
+
+  return tree;
+}
+
 export async function listTrees(params: {
   page: number;
   limit: number;
@@ -114,8 +207,36 @@ export async function listTrees(params: {
     db.select({ total: count() }).from(trees).where(where),
   ]);
 
+  const [listPersons, listRelationships] =
+    items.length > 0
+      ? await Promise.all([
+          db.select().from(persons).where(inArray(persons.treeId, items.map((tree) => tree.id))),
+          db
+            .select()
+            .from(relationships)
+            .where(inArray(relationships.treeId, items.map((tree) => tree.id))),
+        ])
+      : [[], []];
+  const personsByTreeId = new Map<string, PersonRecord[]>();
+  const relationshipsByTreeId = new Map<string, RelationshipRecord[]>();
+  for (const person of listPersons) {
+    if (!personsByTreeId.has(person.treeId)) personsByTreeId.set(person.treeId, []);
+    personsByTreeId.get(person.treeId)!.push(person);
+  }
+  for (const rel of listRelationships) {
+    if (!relationshipsByTreeId.has(rel.treeId)) relationshipsByTreeId.set(rel.treeId, []);
+    relationshipsByTreeId.get(rel.treeId)!.push(rel);
+  }
+
   return {
-    items,
+    items: items.map((tree) => ({
+      ...tree,
+      memberCount: mainFamilyCount(
+        tree,
+        personsByTreeId.get(tree.id) ?? [],
+        relationshipsByTreeId.get(tree.id) ?? []
+      ),
+    })),
     pagination: {
       page,
       limit,
@@ -127,15 +248,16 @@ export async function listTrees(params: {
 
 export async function getTreeStats(slug: string) {
   const tree = await getTreeBySlug(slug);
+  const [allPersons, treeRelationships] = await Promise.all([
+    db.select().from(persons).where(eq(persons.treeId, tree.id)),
+    db.select().from(relationships).where(eq(relationships.treeId, tree.id)),
+  ]);
+  const visibleIds = mainFamilyPersonIds(tree, allPersons, treeRelationships);
+  const visiblePersons = allPersons.filter((person) => visibleIds.has(person.id));
 
-  const [stats] = await db
-    .select({
-      totalMembers: count(),
-      livingMembers: sql<number>`count(*) filter (where ${persons.isAlive} = true)`,
-      deceasedMembers: sql<number>`count(*) filter (where ${persons.isAlive} = false)`,
-    })
-    .from(persons)
-    .where(eq(persons.treeId, tree.id));
+  const totalMembers = visiblePersons.length;
+  const livingMembers = visiblePersons.filter((person) => person.isAlive).length;
+  const deceasedMembers = visiblePersons.filter((person) => !person.isAlive).length;
 
   const gotraResult = await db
     .select({
@@ -149,9 +271,9 @@ export async function getTreeStats(slug: string) {
     .limit(1);
 
   return {
-    totalMembers: Number(stats?.totalMembers ?? 0),
-    livingMembers: Number(stats?.livingMembers ?? 0),
-    deceasedMembers: Number(stats?.deceasedMembers ?? 0),
+    totalMembers,
+    livingMembers,
+    deceasedMembers,
     generationSpan: tree.generationCount,
     commonGotra: gotraResult[0]?.gotra ?? null,
     oldestPerson: null,
@@ -205,6 +327,7 @@ export async function createTreeFromWizard(
       lastName: string;
       gender: 'male' | 'female' | 'other';
       dateOfBirth?: Date;
+      placeOfBirth?: string;
       gotra?: string;
     };
     parents?: Array<{
@@ -212,12 +335,14 @@ export async function createTreeFromWizard(
       lastName: string;
       gender: 'male' | 'female' | 'other';
       dateOfBirth?: Date;
+      placeOfBirth?: string;
     }>;
     spouse?: {
       firstName: string;
       lastName: string;
       gender: 'male' | 'female' | 'other';
       dateOfBirth?: Date;
+      placeOfBirth?: string;
       marriageDate?: Date;
     };
     siblings?: Array<{
@@ -225,6 +350,7 @@ export async function createTreeFromWizard(
       lastName: string;
       gender: 'male' | 'female' | 'other';
       dateOfBirth?: Date;
+      placeOfBirth?: string;
     }>;
   },
   userId: string
@@ -250,6 +376,7 @@ export async function createTreeFromWizard(
         lastName: data.self.lastName,
         gender: data.self.gender,
         dateOfBirth: data.self.dateOfBirth ?? null,
+        placeOfBirth: data.self.placeOfBirth ?? null,
         gotra: data.self.gotra ?? null,
         claimedByUserId: userId,
       })
@@ -269,6 +396,7 @@ export async function createTreeFromWizard(
             lastName: parent.lastName,
             gender: parent.gender,
             dateOfBirth: parent.dateOfBirth ?? null,
+            placeOfBirth: parent.placeOfBirth ?? null,
           })
           .returning();
 
@@ -294,6 +422,7 @@ export async function createTreeFromWizard(
           lastName: data.spouse.lastName,
           gender: data.spouse.gender,
           dateOfBirth: data.spouse.dateOfBirth ?? null,
+          placeOfBirth: data.spouse.placeOfBirth ?? null,
         })
         .returning();
 
@@ -319,6 +448,7 @@ export async function createTreeFromWizard(
             lastName: sibling.lastName,
             gender: sibling.gender,
             dateOfBirth: sibling.dateOfBirth ?? null,
+            placeOfBirth: sibling.placeOfBirth ?? null,
           })
           .returning();
 

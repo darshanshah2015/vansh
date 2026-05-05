@@ -18,6 +18,7 @@ treeRoutes.post('/', requireAuth, validateBody(createTreeSchema), treesControlle
 treeRoutes.get('/', searchRateLimiter, validateQuery(listTreesSchema), treesController.listTrees);
 treeRoutes.get('/:slug', treesController.getTreeBySlug);
 treeRoutes.patch('/:slug', requireAuth, validateBody(updateTreeSchema), treesController.updateTree);
+treeRoutes.post('/:slug/join', requireAuth, treesController.joinTree);
 treeRoutes.get('/:slug/stats', treesController.getTreeStats);
 treeRoutes.get('/:slug/activity', treesController.getTreeActivity);
 treeRoutes.get('/:slug/members', treesController.getTreeMembers);

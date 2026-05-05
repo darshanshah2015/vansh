@@ -24,6 +24,7 @@ export const persons = pgTable(
     lastName: varchar('last_name', { length: 100 }).notNull(),
     gender: genderEnum('gender').notNull(),
     dateOfBirth: timestamp('date_of_birth', { withTimezone: true, mode: 'date' }),
+    placeOfBirth: varchar('place_of_birth', { length: 255 }),
     dateOfDeath: timestamp('date_of_death', { withTimezone: true, mode: 'date' }),
     isAlive: boolean('is_alive').notNull().default(true),
     gotra: varchar('gotra', { length: 100 }),

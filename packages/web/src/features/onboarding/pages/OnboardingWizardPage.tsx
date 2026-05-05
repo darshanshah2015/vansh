@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowRight, Loader2, MapPin, Plus, Search, UserRound } from 'lucide-react';
+import { ArrowRight, Loader2, MapPin, Plus, Search, TreePine, UserRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/services/api';
 
@@ -261,12 +261,20 @@ export default function OnboardingWizardPage() {
             lastName,
             gender: 'other',
             dateOfBirth: ageToDateOfBirth(details.age),
+            placeOfBirth: details.birthPlace.trim(),
           },
         })
         .then((r) => r.data);
     },
     onSuccess: (tree) => navigate(`/trees/${tree.slug}?tour=1`),
     onError: (err) => setError((err as Error).message || 'Could not create this tree.'),
+  });
+
+  const joinTreeMutation = useMutation({
+    mutationFn: (tree: TreeResult) =>
+      api.post<{ data: { slug: string } }>(`/api/trees/${tree.slug}/join`).then((r) => r.data),
+    onSuccess: (tree) => navigate(`/trees/${tree.slug}?tour=1`),
+    onError: (err) => setError((err as Error).message || 'Could not join this tree.'),
   });
 
   const handleDetailsSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -321,12 +329,12 @@ export default function OnboardingWizardPage() {
         <section className="mx-auto max-w-2xl px-4 py-8 md:px-8">
           <div className="mb-6">
             <p className="text-sm font-medium text-primary">Member details</p>
-            <h1 className="mt-2 text-2xl font-semibold">Tell us about the member</h1>
+            <h1 className="mt-2 text-2xl font-semibold">Enter your details</h1>
           </div>
           <form onSubmit={handleDetailsSubmit} className="space-y-4">
             <div>
               <label htmlFor="name" className="mb-1.5 block text-sm font-medium">
-                Name
+                First name
               </label>
               <input
                 id="name"
@@ -337,7 +345,7 @@ export default function OnboardingWizardPage() {
             </div>
             <div>
               <label htmlFor="familyName" className="mb-1.5 block text-sm font-medium">
-                Family name
+                Family or surname
               </label>
               <input
                 id="familyName"
@@ -394,16 +402,21 @@ export default function OnboardingWizardPage() {
       )}
 
       {step === 'existing' && (
-        <section className="mx-auto max-w-3xl px-4 py-8 md:px-8">
-          <p className="text-sm font-medium text-primary">Possible family found</p>
-          <h1 className="mt-2 text-2xl font-semibold">This family name already exists</h1>
+        <section className="mx-auto max-w-4xl px-4 py-8 md:px-8">
+          <p className="text-sm font-medium text-primary">Choose your tree</p>
+          <h1 className="mt-2 text-2xl font-semibold">
+            Join an existing {details.familyName.trim()} tree
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            These trees already match your family or surname. Join one if it looks right, or
+            create a new tree for your branch below.
+          </p>
+
           <div className="mt-6 grid gap-3">
             {existingFamilies.map((tree) => (
-              <button
+              <div
                 key={tree.id}
-                type="button"
-                onClick={() => navigate(`/trees/${tree.slug}`)}
-                className="flex items-center justify-between rounded-md border border-border bg-card p-4 text-left hover:border-primary"
+                className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <span>
                   <span className="block font-medium">{tree.name}</span>
@@ -411,10 +424,59 @@ export default function OnboardingWizardPage() {
                     {tree.memberCount ?? 0} members
                   </span>
                 </span>
-                <Search className="h-4 w-4 text-muted-foreground" />
-              </button>
+                <span className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/trees/${tree.slug}`)}
+                    className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-secondary"
+                  >
+                    <Search className="h-4 w-4" />
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => joinTreeMutation.mutate(tree)}
+                    disabled={joinTreeMutation.isPending}
+                    className="inline-flex min-h-[40px] items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {joinTreeMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <TreePine className="h-4 w-4" />
+                    )}
+                    Join tree
+                  </button>
+                </span>
+              </div>
             ))}
           </div>
+
+          <div className="mt-8 border-t border-border pt-6">
+            <h2 className="text-lg font-semibold">Create a new tree</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Suggested names based on your details.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {recommendations.slice(0, 4).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => createTreeMutation.mutate(name)}
+                  disabled={createTreeMutation.isPending}
+                  className="rounded-md border border-border bg-card p-4 text-left hover:border-primary disabled:opacity-50"
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <UserRound className="h-4 w-4 text-primary" />
+                    {name}
+                  </span>
+                  <span className="mt-2 block text-sm text-muted-foreground">
+                    Create this as my tree
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-6 flex justify-between">
             <button
               type="button"
@@ -426,11 +488,12 @@ export default function OnboardingWizardPage() {
             <button
               type="button"
               onClick={() => setStep('choose')}
-              className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              className="rounded-md border border-border px-4 py-2.5 text-sm font-medium hover:bg-secondary"
             >
-              Skip
+              More names
             </button>
           </div>
+          {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
         </section>
       )}
 

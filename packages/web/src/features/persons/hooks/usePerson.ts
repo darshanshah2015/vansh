@@ -43,6 +43,8 @@ export function useUpdatePerson() {
       api.patch<{ data: any }>(`/api/persons/${id}`, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['person', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
+      queryClient.invalidateQueries({ queryKey: ['trees'] });
     },
   });
 }

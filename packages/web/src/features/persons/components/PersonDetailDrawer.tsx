@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, UserCheck, Pencil, Check, Loader2, CheckCircle2 } from 'lucide-react';
 import { usePerson, usePersonRelationships, useUpdatePerson } from '../hooks/usePerson';
 import { PersonTimeline } from './PersonTimeline';
@@ -14,11 +14,19 @@ interface PersonDetailDrawerProps {
   personId: string;
   treeSlug: string;
   onClose: () => void;
+  onSelectPerson?: (personId: string) => void;
   onNavigateToFamily?: (personId: string) => void;
   onDone?: () => void;
 }
 
-export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFamily, onDone }: PersonDetailDrawerProps) {
+export function PersonDetailDrawer({
+  personId,
+  treeSlug,
+  onClose,
+  onSelectPerson,
+  onNavigateToFamily,
+  onDone,
+}: PersonDetailDrawerProps) {
   const { data: person, isLoading } = usePerson(personId);
   const { data: relationships } = usePersonRelationships(personId);
   const { user } = useAuth();
@@ -31,6 +39,12 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
   const [editData, setEditData] = useState<Record<string, any>>({});
 
   const canClaim = person && !person.claimedByUserId && user;
+
+  useEffect(() => {
+    setEditing(false);
+    setEditData({});
+    setActiveTab('details');
+  }, [personId]);
 
   if (isLoading) {
     return (
@@ -55,6 +69,7 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
       lastName: person.lastName,
       gender: person.gender,
       dateOfBirth: person.dateOfBirth ? format(new Date(person.dateOfBirth), 'yyyy-MM-dd') : '',
+      placeOfBirth: person.placeOfBirth ?? '',
       dateOfDeath: person.dateOfDeath ? format(new Date(person.dateOfDeath), 'yyyy-MM-dd') : '',
       gotra: person.gotra ?? '',
       isAlive: person.isAlive,
@@ -68,6 +83,9 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
     if (editData.firstName !== person.firstName) payload.firstName = editData.firstName;
     if (editData.lastName !== person.lastName) payload.lastName = editData.lastName;
     if (editData.gender !== person.gender) payload.gender = editData.gender;
+    if (editData.placeOfBirth !== (person.placeOfBirth ?? '')) {
+      payload.placeOfBirth = editData.placeOfBirth || '';
+    }
     if (editData.gotra !== (person.gotra ?? '')) payload.gotra = editData.gotra || null;
     if (editData.bio !== (person.bio ?? '')) payload.bio = editData.bio || null;
     if (editData.isAlive !== person.isAlive) payload.isAlive = editData.isAlive;
@@ -85,6 +103,13 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
       await updatePerson.mutateAsync({ id: personId, data: payload });
     }
     setEditing(false);
+  };
+
+  const handleDoneClick = async () => {
+    if (editing) {
+      await saveEdits();
+    }
+    onDone?.();
   };
 
   const inputClass = 'h-8 w-full rounded border border-border bg-background px-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
@@ -108,8 +133,13 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                 {updatePerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               </button>
             ) : (
-              <button onClick={startEditing} className="rounded-md p-2 hover:bg-secondary" aria-label="Edit">
+              <button
+                onClick={startEditing}
+                className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-secondary"
+                aria-label="Edit details"
+              >
                 <Pencil className="h-4 w-4" />
+                Edit
               </button>
             )}
             <button onClick={onClose} className="rounded-md p-2 hover:bg-secondary" aria-label="Close">
@@ -176,6 +206,10 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                     <label className="mb-1 block text-xs text-muted-foreground">Date of Birth</label>
                     <DateOfBirthPicker value={editData.dateOfBirth} onChange={(v) => setEditData({ ...editData, dateOfBirth: v })} />
                   </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Place of Birth</label>
+                    <input className={inputClass} value={editData.placeOfBirth} onChange={(e) => setEditData({ ...editData, placeOfBirth: e.target.value })} />
+                  </div>
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-muted-foreground">Living</label>
                     <button
@@ -208,6 +242,19 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                       onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={saveEdits}
+                    disabled={updatePerson.isPending}
+                    className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {updatePerson.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Save changes
+                  </button>
                 </div>
               ) : (
                 <>
@@ -222,6 +269,10 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                         <p>{format(new Date(person.dateOfBirth), 'dd MMM yyyy')}</p>
                       </div>
                     )}
+                    <div>
+                      <span className="text-muted-foreground">Birth place</span>
+                      <p>{person.placeOfBirth || 'Not added'}</p>
+                    </div>
                     {person.dateOfDeath && (
                       <div>
                         <span className="text-muted-foreground">Died</span>
@@ -235,6 +286,17 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                       </div>
                     )}
                   </div>
+
+                  {!person.placeOfBirth && (
+                    <button
+                      type="button"
+                      onClick={startEditing}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Add birth place
+                    </button>
+                  )}
 
                   {person.bio && (
                     <div>
@@ -266,6 +328,7 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
                   personFirstName={person.firstName}
                   relationships={relationships}
                   onAddFromSlot={handleAddFromSlot}
+                  onSelectPerson={onSelectPerson}
                   onNavigateToFamily={onNavigateToFamily}
                 />
               )}
@@ -279,10 +342,15 @@ export function PersonDetailDrawer({ personId, treeSlug, onClose, onNavigateToFa
           <div className="sticky bottom-0 z-10 border-t border-border bg-card p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)]">
             <button
               type="button"
-              onClick={onDone}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              onClick={handleDoneClick}
+              disabled={updatePerson.isPending}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              <CheckCircle2 className="h-4 w-4" />
+              {updatePerson.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
               Done
             </button>
           </div>

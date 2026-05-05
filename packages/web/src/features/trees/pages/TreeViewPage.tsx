@@ -85,7 +85,7 @@ export default function TreeViewPage() {
   const handleDone = useCallback(() => {
     setSelectedPersonId(null);
     setShowOnboardingHint(false);
-    navigate(`/trees/${slug}/overview`);
+    navigate(`/trees/${slug}`);
   }, [navigate, slug]);
 
   return (
@@ -151,6 +151,22 @@ export default function TreeViewPage() {
                 )}
                 <div className="absolute right-4 top-4 z-10 rounded-md border border-border bg-background/95 p-3 text-xs shadow-sm">
                   <div className="flex flex-col gap-2">
+                    <div className="font-medium text-foreground">Colors</div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-5 rounded bg-blue-100 ring-1 ring-blue-500" />
+                      <span className="font-medium text-muted-foreground">male</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-5 rounded bg-pink-100 ring-1 ring-pink-500" />
+                      <span className="font-medium text-muted-foreground">female</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-5 rounded bg-gray-100 ring-1 ring-gray-500" />
+                      <span className="font-medium text-muted-foreground">other</span>
+                    </div>
+                    <div className="mt-1 border-t border-border pt-2 font-medium text-foreground">
+                      Links
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="h-1 w-8 rounded-full bg-rose-400" />
                       <span className="font-medium text-muted-foreground">spouse</span>
@@ -193,6 +209,7 @@ export default function TreeViewPage() {
           personId={selectedPersonId}
           treeSlug={slug!}
           onClose={() => setSelectedPersonId(null)}
+          onSelectPerson={setSelectedPersonId}
           onNavigateToFamily={(id) => handleNavigateToFamily(id)}
           onDone={handleDone}
         />

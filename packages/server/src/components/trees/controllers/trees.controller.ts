@@ -16,6 +16,11 @@ export async function updateTree(req: Request, res: Response) {
   res.json({ data: tree });
 }
 
+export async function joinTree(req: Request, res: Response) {
+  const tree = await treesService.joinTree(req.params.slug as string, req.user!.id);
+  res.json({ data: tree });
+}
+
 export async function listTrees(req: Request, res: Response) {
   const result = await treesService.listTrees(req.query as any);
   res.json(result);

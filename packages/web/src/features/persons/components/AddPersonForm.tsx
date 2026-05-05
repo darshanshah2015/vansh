@@ -19,6 +19,7 @@ const personSchema = z.object({
   lastName: z.string().min(1, 'Required'),
   gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z.string().optional(),
+  placeOfBirth: z.string().optional(),
   gotra: z.string().optional(),
 });
 
@@ -179,6 +180,19 @@ export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onC
               render={({ field }) => (
                 <DateOfBirthPicker value={field.value} onChange={field.onChange} />
               )}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ap-placeOfBirth" className="mb-1 block text-xs font-medium">
+              Place of Birth
+            </label>
+            <input
+              id="ap-placeOfBirth"
+              type="text"
+              autoComplete="off"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...register('placeOfBirth')}
             />
           </div>
 

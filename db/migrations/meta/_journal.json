@@ -8,6 +8,13 @@
       "when": 1776676184340,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777946400000,
+      "tag": "0001_add_person_place_of_birth",
+      "breakpoints": true
     }
   ]
 }

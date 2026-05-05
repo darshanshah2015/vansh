@@ -2,8 +2,8 @@ import * as d3 from 'd3';
 import type { PersonNode, CoupleNode } from './treeLayout';
 
 // Card dimensions
-export const CARD_W = 160;
-export const CARD_H = 72;
+export const CARD_W = 210;
+export const CARD_H = 104;
 export const CARD_R = 8;
 export const COUPLE_GAP = 16;
 
@@ -21,6 +21,13 @@ const GENDER_BG: Record<string, string> = {
 const CARD_STROKE = '#E5E7EB';
 const SELECTED_STROKE = '#2E7D32';
 const SPOUSE_LINE_COLOR = '#FB7185';
+
+function nameLines(person: PersonNode): string[] {
+  const words = `${person.firstName} ${person.lastName}`.trim().split(/\s+/);
+  if (words.length <= 2) return [words.join(' ')];
+  const midpoint = Math.ceil(words.length / 2);
+  return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')];
+}
 
 function formatYear(dateStr?: string | null): string {
   if (!dateStr) return '';
@@ -94,7 +101,7 @@ export function renderPersonCard(
     .attr('width', CARD_W)
     .attr('height', CARD_H)
     .attr('rx', CARD_R)
-    .attr('fill', isSelected ? '#F0FFF0' : '#FFFFFF')
+    .attr('fill', isSelected ? '#F0FFF0' : bg)
     .attr('stroke', isSelected ? SELECTED_STROKE : CARD_STROKE)
     .attr('stroke-width', isSelected ? 2.5 : 1)
     .attr('opacity', opacity);
@@ -111,12 +118,12 @@ export function renderPersonCard(
 
   // Initials circle
   const circleX = -CARD_W / 2 + 28;
-  const circleY = 0;
+  const circleY = -10;
   g.append('circle')
     .attr('cx', circleX)
     .attr('cy', circleY)
     .attr('r', 18)
-    .attr('fill', bg)
+    .attr('fill', '#FFFFFF')
     .attr('stroke', accent)
     .attr('stroke-width', 1.5)
     .attr('opacity', opacity);
@@ -134,26 +141,41 @@ export function renderPersonCard(
 
   // Full name
   const textX = -CARD_W / 2 + 54;
-  g.append('text')
+  const lines = nameLines(person);
+  const nameText = g.append('text')
     .attr('x', textX)
-    .attr('y', -8)
+    .attr('y', -26)
     .attr('font-size', '12px')
     .attr('font-weight', '600')
     .attr('fill', '#1F2937')
-    .attr('opacity', opacity)
-    .text(`${person.firstName} ${person.lastName}`.slice(0, 16));
+    .attr('opacity', opacity);
+
+  lines.forEach((line, index) => {
+    nameText.append('tspan')
+      .attr('x', textX)
+      .attr('dy', index === 0 ? 0 : 14)
+      .text(line);
+  });
 
   // Life span
   const span = lifeSpan(person);
   if (span) {
     g.append('text')
       .attr('x', textX)
-      .attr('y', 8)
+      .attr('y', lines.length > 1 ? 8 : -6)
       .attr('font-size', '10px')
       .attr('fill', '#6B7280')
       .attr('opacity', opacity)
       .text(span);
   }
+
+  g.append('text')
+    .attr('x', textX)
+    .attr('y', 28)
+    .attr('font-size', '10px')
+    .attr('fill', person.placeOfBirth ? '#4B5563' : '#9CA3AF')
+    .attr('opacity', opacity)
+    .text(person.placeOfBirth ? `Born in ${person.placeOfBirth}` : 'Birth place not added');
 
   // Status dot
   g.append('circle')
