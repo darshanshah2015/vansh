@@ -19,6 +19,7 @@ treeRoutes.get('/', searchRateLimiter, validateQuery(listTreesSchema), treesCont
 treeRoutes.get('/:slug', treesController.getTreeBySlug);
 treeRoutes.patch('/:slug', requireAuth, validateBody(updateTreeSchema), treesController.updateTree);
 treeRoutes.post('/:slug/join', requireAuth, treesController.joinTree);
+treeRoutes.get('/:slug/external-matches/wikitree', requireAuth, treesController.getWikiTreeMatches);
 treeRoutes.get('/:slug/stats', treesController.getTreeStats);
 treeRoutes.get('/:slug/activity', treesController.getTreeActivity);
 treeRoutes.get('/:slug/members', treesController.getTreeMembers);

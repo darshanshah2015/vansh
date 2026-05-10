@@ -83,6 +83,50 @@ export function useTreeActivity(slug: string, page = 1) {
   });
 }
 
+export interface WikiTreeExternalMatch {
+  provider: 'WikiTree';
+  matchedPersonId: string;
+  matchedPersonName: string;
+  score: number;
+  reasons: string[];
+  profile: {
+    id?: number;
+    wikiTreeId?: string;
+    firstName?: string;
+    lastName?: string;
+    birthDate?: string;
+    birthLocation?: string;
+    deathDate?: string;
+    deathLocation?: string;
+    gender?: string;
+    url?: string;
+  };
+}
+
+export interface WikiTreeMatchGroup {
+  personId: string;
+  personName: string;
+  matches: WikiTreeExternalMatch[];
+}
+
+export function useWikiTreeMatches(slug: string) {
+  return useQuery({
+    queryKey: ['tree', slug, 'external-matches', 'wikitree'],
+    queryFn: () =>
+      api
+        .get<{
+          data: {
+            provider: 'WikiTree';
+            searchedPeople: number;
+            groups: WikiTreeMatchGroup[];
+          };
+        }>(`/api/trees/${slug}/external-matches/wikitree`)
+        .then((r) => r.data),
+    enabled: false,
+    retry: false,
+  });
+}
+
 export function useCreateTree() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -181,6 +181,27 @@ export async function getRelationshipsForPerson(personId: string) {
     r.personId1 === personId ? r.personId2 : r.personId1
   );
 
+  const childRels = directRels.filter(
+    (r) => r.relationshipType === 'parent_child' && r.personId1 === personId
+  );
+  const derivedCoParents: string[] = [];
+  for (const childRel of childRels) {
+    const coParentRels = await db
+      .select({ parentId: relationships.personId1 })
+      .from(relationships)
+      .where(
+        and(
+          eq(relationships.personId2, childRel.personId2),
+          eq(relationships.relationshipType, 'parent_child')
+        )
+      );
+    derivedCoParents.push(
+      ...coParentRels
+        .map((r) => r.parentId)
+        .filter((id) => id !== personId && !spouseIds.includes(id))
+    );
+  }
+
   const derivedInLaws: { personId: string; through: string }[] = [];
   for (const spouseId of spouseIds) {
     const spouseParentRels = await db
@@ -200,6 +221,7 @@ export async function getRelationshipsForPerson(personId: string) {
   return {
     direct: directRels,
     derivedSiblings,
+    derivedCoParents: [...new Set(derivedCoParents)],
     derivedInLaws,
   };
 }

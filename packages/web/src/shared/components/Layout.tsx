@@ -4,7 +4,6 @@ import { TreePine, User, LogOut, Search, Menu, X, Shield, HelpCircle, Download, 
 import { NotificationBell } from './NotificationBell';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/shared/contexts/AuthContext';
-import { useMyTree } from '@/shared/hooks/useMyTree';
 import { MobileBottomNav } from './MobileBottomNav';
 import { InstallPrompt } from './InstallPrompt';
 import { InstallInstructionsDialog } from './InstallInstructionsDialog';
@@ -19,7 +18,6 @@ export function Layout() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const { myTreePath } = useMyTree();
   const { canInstall, canPromptNatively, isInstalled, instructions, promptInstall } = useInstallPrompt();
 
   const handleInstallClick = async () => {
@@ -39,7 +37,7 @@ export function Layout() {
 
   const navLinks = [
     { to: '/onboarding', label: 'Home', icon: Home },
-    { to: myTreePath, label: 'My Tree', icon: TreePine },
+    { to: '/my-tree', label: 'My Tree', icon: TreePine },
     { to: '/trees', label: 'Browse Trees', icon: Search },
     { to: '/search', label: 'Search', icon: Search },
     ...(user?.role === 'admin' ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),

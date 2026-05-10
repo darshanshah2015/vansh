@@ -345,13 +345,34 @@ export function buildLineageHierarchy(
     };
   }
 
-  // Find root: topmost ancestor with most descendants
+  // Find roots: every topmost ancestor should remain visible. A maternal
+  // grandparent and paternal grandparent can both be true roots of the
+  // focused line, even if one side's child was already paired as a spouse.
   const sortedRoots = topAncestors
     .map((id) => ({ id, desc: countLineageDescendants(id, childrenOf, lineageSet) }))
     .sort((a, b) => b.desc - a.desc);
 
-  const rootPersonId = sortedRoots[0]?.id ?? focusPersonId;
-  let rootNode = buildLineageNode(rootPersonId);
+  const rootNodes = sortedRoots
+    .map(({ id }) => buildLineageNode(id))
+    .filter((node): node is CoupleNode => Boolean(node));
+
+  let rootNode: CoupleNode | null =
+    rootNodes.length === 1
+      ? rootNodes[0]
+      : rootNodes.length > 1
+        ? {
+            id: 'virtual-root',
+            primary: {
+              id: 'virtual-root',
+              firstName: '',
+              lastName: '',
+              gender: 'other',
+              isAlive: true,
+              photoKey: null,
+            },
+            children: rootNodes,
+          }
+        : null;
 
   if (!rootNode) {
     const person = personMap.get(focusPersonId);

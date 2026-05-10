@@ -43,6 +43,11 @@ export async function getTreeMembers(req: Request, res: Response) {
   res.json({ data: members });
 }
 
+export async function getWikiTreeMatches(req: Request, res: Response) {
+  const matches = await treesService.getWikiTreeMatches(req.params.slug as string, req.user!.id);
+  res.json({ data: matches });
+}
+
 export async function createTreeFromWizard(req: Request, res: Response) {
   const tree = await treesService.createTreeFromWizard(req.body, req.user!.id);
   res.status(201).json({ data: tree });

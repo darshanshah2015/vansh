@@ -30,9 +30,20 @@ interface AddPersonFormProps {
   prefilledRelType: string | null;
   relatedPersonId: string | null;
   onClose: () => void;
+  title?: string;
+  intro?: string;
+  submitLabel?: string;
 }
 
-export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onClose }: AddPersonFormProps) {
+export function AddPersonForm({
+  treeSlug,
+  prefilledRelType,
+  relatedPersonId,
+  onClose,
+  title = 'Add Person',
+  intro,
+  submitLabel = 'Add Person',
+}: AddPersonFormProps) {
   const addPerson = useAddPerson(treeSlug);
   const addRelationship = useAddRelationship(treeSlug);
   const { data: existingRels } = usePersonRelationships(relatedPersonId ?? '');
@@ -101,7 +112,10 @@ export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onC
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 md:items-center">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-xl bg-card p-4 pb-20 md:rounded-xl md:pb-4">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-semibold">Add Person</h2>
+          <div>
+            <h2 className="font-semibold">{title}</h2>
+            {intro && <p className="mt-1 text-xs text-muted-foreground">{intro}</p>}
+          </div>
           <button onClick={onClose} className="rounded-md p-2 hover:bg-secondary" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
@@ -214,7 +228,7 @@ export function AddPersonForm({ treeSlug, prefilledRelType, relatedPersonId, onC
             disabled={addPerson.isPending}
             className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {addPerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Person'}
+            {addPerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
           </button>
         </form>
       </div>

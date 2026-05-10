@@ -29,14 +29,17 @@ export function RelationshipSlots({
     (r: any) => r.relationshipType === 'parent_child' && r.personId1 === personId
   );
   const spouses = direct.filter((r: any) => r.relationshipType === 'spouse');
-  const spouseIds = spouses.map((r: any) => (r.personId1 === personId ? r.personId2 : r.personId1));
+  const spouseIds = [
+    ...spouses.map((r: any) => (r.personId1 === personId ? r.personId2 : r.personId1)),
+    ...(relationships.derivedCoParents || []),
+  ];
   const siblings = relationships.derivedSiblings || [];
 
   const sections = [
     { label: 'Parents', items: parents.map((r: any) => r.personId1), relType: 'add_parent', max: 2 },
     {
       label: 'Spouse',
-      items: spouseIds,
+      items: [...new Set(spouseIds)],
       relType: 'spouse',
       max: 4,
     },

@@ -183,7 +183,7 @@ function ExampleTreeAnimation() {
       <div className="flex flex-row gap-3 pt-3 text-xs sm:flex-col sm:pl-4 sm:pt-0">
         {[
           ['spouse', relationshipStyles.rose.swatch],
-          ['kid', relationshipStyles.emerald.swatch],
+          ['parent', relationshipStyles.emerald.swatch],
         ].map(([label, swatch]) => (
           <div key={label} className="flex items-center gap-2">
             <span className={`h-3 w-6 rounded-full ${swatch}`} />

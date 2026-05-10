@@ -19,6 +19,25 @@ type TreeRecord = typeof trees.$inferSelect;
 type PersonRecord = typeof persons.$inferSelect;
 type RelationshipRecord = typeof relationships.$inferSelect;
 
+interface WikiTreeProfile {
+  Id?: number;
+  Name?: string;
+  FirstName?: string;
+  LastNameAtBirth?: string;
+  LastNameCurrent?: string;
+  BirthDate?: string;
+  BirthLocation?: string;
+  DeathDate?: string;
+  DeathLocation?: string;
+  Gender?: string;
+}
+
+interface WikiTreeSearchResponse {
+  status?: number;
+  matches?: WikiTreeProfile[];
+  total?: number;
+}
+
 const GENERIC_TREE_NAME_PARTS = new Set(['family', 'vansh', 'tree']);
 
 function familyNameParts(treeName: string) {
@@ -120,6 +139,212 @@ export async function getTreeBySlug(slug: string) {
   ]);
 
   return { ...tree, memberCount: mainFamilyCount(tree, treePersons, treeRelationships) };
+}
+
+function yearFromDate(date?: Date | null) {
+  return date ? date.getUTCFullYear() : null;
+}
+
+function dateForWikiTree(date?: Date | null) {
+  if (!date) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function profileYear(date?: string) {
+  if (!date || date.startsWith('0000')) return null;
+  const year = Number(date.slice(0, 4));
+  return Number.isFinite(year) && year > 0 ? year : null;
+}
+
+function sameText(a?: string | null, b?: string | null) {
+  if (!a || !b) return false;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function containsPlace(haystack?: string | null, needle?: string | null) {
+  if (!haystack || !needle) return false;
+  return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function scoreWikiTreeProfile(person: PersonRecord, profile: WikiTreeProfile, parents: PersonRecord[]) {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (sameText(person.firstName, profile.FirstName)) {
+    score += 30;
+    reasons.push('first name');
+  }
+
+  const profileSurname = profile.LastNameAtBirth ?? profile.LastNameCurrent ?? profile.Name?.split('-')[0];
+  if (sameText(person.lastName, profileSurname)) {
+    score += 30;
+    reasons.push('surname');
+  }
+
+  const localBirthYear = yearFromDate(person.dateOfBirth);
+  const remoteBirthYear = profileYear(profile.BirthDate);
+  if (localBirthYear && remoteBirthYear) {
+    const yearDelta = Math.abs(localBirthYear - remoteBirthYear);
+    if (yearDelta === 0) {
+      score += 24;
+      reasons.push('birth year');
+    } else if (yearDelta <= 2) {
+      score += 12;
+      reasons.push('near birth year');
+    }
+  }
+
+  if (containsPlace(profile.BirthLocation, person.placeOfBirth)) {
+    score += 18;
+    reasons.push('birth place');
+  }
+
+  const parentSurnameMatched = parents.some((parent) => sameText(parent.lastName, profileSurname));
+  if (parentSurnameMatched) {
+    score += 8;
+    reasons.push('family surname');
+  }
+
+  return { score, reasons };
+}
+
+function profileUrl(profile: WikiTreeProfile) {
+  return profile.Name ? `https://www.wikitree.com/wiki/${encodeURIComponent(profile.Name)}` : null;
+}
+
+async function searchWikiTreePerson(person: PersonRecord, parents: PersonRecord[]) {
+  const params = new URLSearchParams({
+    action: 'searchPerson',
+    FirstName: person.firstName,
+    LastName: person.lastName,
+    fields: [
+      'Id',
+      'Name',
+      'FirstName',
+      'LastNameAtBirth',
+      'LastNameCurrent',
+      'BirthDate',
+      'BirthLocation',
+      'DeathDate',
+      'DeathLocation',
+      'Gender',
+    ].join(','),
+    limit: '5',
+    dateInclude: 'neither',
+    lastNameMatch: 'all',
+  });
+
+  const birthDate = dateForWikiTree(person.dateOfBirth);
+  if (birthDate) {
+    params.set('BirthDate', birthDate);
+    params.set('dateSpread', '5');
+  }
+  if (person.placeOfBirth) params.set('BirthLocation', person.placeOfBirth);
+
+  const father = parents.find((parent) => parent.gender === 'male');
+  const mother = parents.find((parent) => parent.gender === 'female');
+  if (father) {
+    params.set('fatherFirstName', father.firstName);
+    params.set('fatherLastName', father.lastName);
+  }
+  if (mother) {
+    params.set('motherFirstName', mother.firstName);
+    params.set('motherLastName', mother.lastName);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(`https://api.wikitree.com/api.php?${params}`, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Vansh/0.1 external-match-search',
+      },
+    });
+
+    if (!response.ok) return [];
+    const payload = (await response.json()) as WikiTreeSearchResponse[] | WikiTreeSearchResponse;
+    const result = Array.isArray(payload) ? payload[0] : payload;
+    return (result.matches ?? [])
+      .map((profile) => {
+        const scored = scoreWikiTreeProfile(person, profile, parents);
+        return {
+          provider: 'WikiTree' as const,
+          matchedPersonId: person.id,
+          matchedPersonName: `${person.firstName} ${person.lastName}`,
+          score: Math.min(scored.score, 100),
+          reasons: scored.reasons,
+          profile: {
+            id: profile.Id,
+            wikiTreeId: profile.Name,
+            firstName: profile.FirstName,
+            lastName: profile.LastNameAtBirth ?? profile.LastNameCurrent,
+            birthDate: profile.BirthDate,
+            birthLocation: profile.BirthLocation,
+            deathDate: profile.DeathDate,
+            deathLocation: profile.DeathLocation,
+            gender: profile.Gender,
+            url: profileUrl(profile),
+          },
+        };
+      })
+      .filter((match) => match.score >= 45 && match.profile.url);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getWikiTreeMatches(slug: string, userId: string) {
+  const tree = await getTreeBySlug(slug);
+  const member = await db.query.treeMembers.findFirst({
+    where: and(eq(treeMembers.treeId, tree.id), eq(treeMembers.userId, userId)),
+  });
+  if (!member) throw new ForbiddenError('You must be a tree member to search external matches');
+
+  const [treePersons, treeRelationships] = await Promise.all([
+    db.select().from(persons).where(eq(persons.treeId, tree.id)),
+    db.select().from(relationships).where(eq(relationships.treeId, tree.id)),
+  ]);
+
+  const parentsByChildId = new Map<string, PersonRecord[]>();
+  const personById = new Map(treePersons.map((person) => [person.id, person]));
+  for (const rel of treeRelationships) {
+    if (rel.relationshipType !== 'parent_child') continue;
+    const parent = personById.get(rel.personId1);
+    if (!parent) continue;
+    if (!parentsByChildId.has(rel.personId2)) parentsByChildId.set(rel.personId2, []);
+    parentsByChildId.get(rel.personId2)!.push(parent);
+  }
+
+  const searchablePeople = [...treePersons]
+    .filter((person) => person.firstName && person.lastName)
+    .sort((a, b) => {
+      const aSignals = Number(Boolean(a.dateOfBirth)) + Number(Boolean(a.placeOfBirth));
+      const bSignals = Number(Boolean(b.dateOfBirth)) + Number(Boolean(b.placeOfBirth));
+      return bSignals - aSignals;
+    })
+    .slice(0, 6);
+
+  const matchGroups = [];
+  for (const person of searchablePeople) {
+    const matches = await searchWikiTreePerson(person, parentsByChildId.get(person.id) ?? []);
+    if (matches.length > 0) {
+      matchGroups.push({
+        personId: person.id,
+        personName: `${person.firstName} ${person.lastName}`,
+        matches: matches.sort((a, b) => b.score - a.score).slice(0, 3),
+      });
+    }
+  }
+
+  return {
+    provider: 'WikiTree',
+    searchedPeople: searchablePeople.length,
+    groups: matchGroups,
+  };
 }
 
 export async function updateTree(

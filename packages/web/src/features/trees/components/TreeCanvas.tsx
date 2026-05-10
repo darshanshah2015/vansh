@@ -94,51 +94,82 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
       const nodePositions = new Map<string, { x: number; y: number }>();
 
       if (viewMode === 'radial') {
-        const radius = Math.max(120, root.descendants().length * 50);
+        const radius = Math.max(180, root.descendants().length * 70);
         const layout = d3.tree<CoupleNode>().size([2 * Math.PI, radius])
           .separation((a, b) => {
-            const wa = a.data.spouse ? 1.8 : 1;
-            const wb = b.data.spouse ? 1.8 : 1;
-            return (wa + wb) / 2 / (a.parent === b.parent ? 1 : 1.5);
-          });
+            const wa = a.data.spouse ? 2 : 1.1;
+            const wb = b.data.spouse ? 2 : 1.1;
+            return (wa + wb) / 2 / (a.parent === b.parent ? 0.95 : 1.35);
+        });
         layout(root);
         root.descendants().forEach((d) => {
+          const angle = d.x ?? 0;
+          const radius = d.y ?? 0;
           nodePositions.set(d.data.id, {
-            x: d.y * Math.cos(d.x - Math.PI / 2),
-            y: d.y * Math.sin(d.x - Math.PI / 2),
+            x: radius * Math.cos(angle - Math.PI / 2),
+            y: radius * Math.sin(angle - Math.PI / 2),
           });
         });
       } else if (viewMode === 'left-right') {
-        const layout = d3.tree<CoupleNode>().nodeSize([CARD_H + 40, 280])
+        const layout = d3.tree<CoupleNode>().nodeSize([CARD_H + 90, 360])
           .separation((a, b) => {
-            const wa = a.data.spouse ? 1.4 : 1;
-            const wb = b.data.spouse ? 1.4 : 1;
-            return (wa + wb) / 2;
-          });
+            const wa = a.data.spouse ? 1.6 : 1.05;
+            const wb = b.data.spouse ? 1.6 : 1.05;
+            return ((wa + wb) / 2) * (a.parent === b.parent ? 1.1 : 1.45);
+        });
         layout(root);
         root.descendants().forEach((d) => {
-          nodePositions.set(d.data.id, { x: d.y, y: d.x });
+          nodePositions.set(d.data.id, { x: d.y ?? 0, y: d.x ?? 0 });
         });
       } else {
         // top-down
-        const layout = d3.tree<CoupleNode>().nodeSize([CARD_W * 2 + 40, CARD_H + 60])
+        const layout = d3.tree<CoupleNode>().nodeSize([CARD_W * 2 + 80, CARD_H + 100])
           .separation((a, b) => {
-            const wa = a.data.spouse ? 1.4 : 1;
-            const wb = b.data.spouse ? 1.4 : 1;
-            return (wa + wb) / 2;
-          });
+            const wa = a.data.spouse ? 1.55 : 1.05;
+            const wb = b.data.spouse ? 1.55 : 1.05;
+            return ((wa + wb) / 2) * (a.parent === b.parent ? 0.95 : 1.25);
+        });
         layout(root);
         root.descendants().forEach((d) => {
-          nodePositions.set(d.data.id, { x: d.x, y: d.y });
+          nodePositions.set(d.data.id, { x: d.x ?? 0, y: d.y ?? 0 });
         });
       }
 
       const isVirtual = (id: string) => id === 'virtual-root';
+      const cardOffset = (CARD_W + COUPLE_GAP) / 2;
+
+      if (viewMode === 'top-down') {
+        const nodeByPersonId = new Map<string, d3.HierarchyNode<CoupleNode>>();
+        root.descendants().forEach((d) => {
+          if (isVirtual(d.data.id)) return;
+          nodeByPersonId.set(d.data.primary.id, d);
+          if (d.data.spouse) nodeByPersonId.set(d.data.spouse.id, d);
+        });
+
+        const personCardX = (personId: string) => {
+          const node = nodeByPersonId.get(personId);
+          if (!node) return null;
+          const pos = nodePositions.get(node.data.id);
+          if (!pos) return null;
+          if (!node.data.spouse) return pos.x;
+          return node.data.primary.id === personId ? pos.x - cardOffset : pos.x + cardOffset;
+        };
+
+        relationships
+          .filter((r) => r.relationshipType === 'parent_child')
+          .forEach((rel) => {
+            const parentNode = nodeByPersonId.get(rel.personId1);
+            const childX = personCardX(rel.personId2);
+            if (!parentNode || childX === null || parentNode.data.spouse) return;
+            const parentPos = nodePositions.get(parentNode.data.id);
+            if (!parentPos || parentPos.y >= (nodePositions.get(nodeByPersonId.get(rel.personId2)?.data.id ?? '')?.y ?? parentPos.y)) return;
+            parentPos.x = childX;
+          });
+      }
 
       // Build person ID → couple center (for parent source) and individual card position (for child target)
       const personCoupleCenter = new Map<string, { x: number; y: number }>();
       const personCardCenter = new Map<string, { x: number; y: number }>();
-      const cardOffset = (CARD_W + COUPLE_GAP) / 2;
       root.descendants().forEach((d) => {
         if (isVirtual(d.data.id)) return;
         const pos = nodePositions.get(d.data.id);
@@ -220,12 +251,14 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
       // Auto-fit
       const bounds = g.node()?.getBBox();
       if (bounds && bounds.width > 0 && bounds.height > 0) {
-        const padding = 60;
-        const scale = Math.min(
+        const padding = width >= 700 ? 70 : 36;
+        const fittedScale = Math.min(
           width / (bounds.width + padding * 2),
           height / (bounds.height + padding * 2),
           1.5
         );
+        const minReadableScale = width >= 700 ? 0.68 : 0.42;
+        const scale = Math.min(Math.max(fittedScale, minReadableScale), 1.5);
         const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
         const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
         const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);

@@ -22,6 +22,7 @@ const OnboardingWizardPage = lazy(
 );
 const ProfilePage = lazy(() => import('@/features/profile/pages/ProfilePage'));
 const TreeSearchPage = lazy(() => import('@/features/trees/pages/TreeSearchPage'));
+const MyTreePage = lazy(() => import('@/features/trees/pages/MyTreePage'));
 const TreeViewPage = lazy(() => import('@/features/trees/pages/TreeViewPage'));
 const TreeOverviewPage = lazy(() => import('@/features/trees/pages/TreeOverviewPage'));
 const ClaimReviewPage = lazy(() => import('@/features/claims/pages/ClaimReviewPage'));
@@ -120,6 +121,7 @@ export function App() {
                 >
                   <Route path="/onboarding/start" element={<OnboardingWizardPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/my-tree" element={<MyTreePage />} />
                   <Route path="/trees" element={<TreeSearchPage />} />
                   <Route path="/trees/:slug" element={<TreeViewPage />} />
                   <Route path="/trees/:slug/overview" element={<TreeOverviewPage />} />

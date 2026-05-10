@@ -1,15 +1,13 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Home, TreePine, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useMyTree } from '@/shared/hooks/useMyTree';
 
 export function MobileBottomNav() {
   const location = useLocation();
-  const { myTreePath } = useMyTree();
 
   const navItems = [
     { to: '/trees', label: 'Home', icon: Home },
-    { to: myTreePath, label: 'My Tree', icon: TreePine },
+    { to: '/my-tree', label: 'My Tree', icon: TreePine },
     { to: '/search', label: 'Search', icon: Search },
   ];
 
