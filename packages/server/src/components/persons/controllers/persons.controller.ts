@@ -26,6 +26,11 @@ export async function updatePerson(req: Request, res: Response) {
   res.json({ data: person });
 }
 
+export async function deletePerson(req: Request, res: Response) {
+  await personsService.deletePerson(req.params.id as string, req.user!.id);
+  res.status(204).send();
+}
+
 export async function requestDeletion(req: Request, res: Response) {
   const request = await personsService.requestDeletion(
     req.params.id as string,

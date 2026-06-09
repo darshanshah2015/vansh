@@ -29,6 +29,7 @@ export default function TreeViewPage() {
   const canvasRef = useRef<TreeCanvasHandle>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbEntry[]>([]);
   const [showAddFirstMember, setShowAddFirstMember] = useState(false);
+  const [showAddStandaloneMember, setShowAddStandaloneMember] = useState(false);
   const [showExternalMatches, setShowExternalMatches] = useState(false);
   const [showOnboardingHint, setShowOnboardingHint] = useState(
     searchParams.get('tour') === '1'
@@ -132,14 +133,24 @@ export default function TreeViewPage() {
               </nav>
             )}
           </div>
-          <button
-            type="button"
-            onClick={handleOpenExternalMatches}
-            className="inline-flex min-h-[36px] items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <Globe2 className="h-4 w-4" />
-            WikiTree matches
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddStandaloneMember(true)}
+              className="inline-flex min-h-[36px] items-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Member
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenExternalMatches}
+              className="inline-flex min-h-[36px] items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Globe2 className="h-4 w-4" />
+              WikiTree matches
+            </button>
+          </div>
         </div>
       )}
 
@@ -398,6 +409,18 @@ export default function TreeViewPage() {
           intro="This person becomes the starting point for the tree."
           submitLabel="Create First Member"
           onClose={() => setShowAddFirstMember(false)}
+        />
+      )}
+
+      {showAddStandaloneMember && (
+        <AddPersonForm
+          treeSlug={slug!}
+          prefilledRelType={null}
+          relatedPersonId={null}
+          title="Add member"
+          intro="Add a person now, then click their node to link them to the tree."
+          submitLabel="Add Member"
+          onClose={() => setShowAddStandaloneMember(false)}
         />
       )}
     </div>

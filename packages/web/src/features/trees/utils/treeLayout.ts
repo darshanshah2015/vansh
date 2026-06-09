@@ -7,6 +7,8 @@ export interface PersonNode {
   photoKey: string | null;
   dateOfBirth?: string | null;
   placeOfBirth?: string | null;
+  health?: string | null;
+  occupation?: string | null;
   dateOfDeath?: string | null;
   claimedByUserId?: string | null;
 }

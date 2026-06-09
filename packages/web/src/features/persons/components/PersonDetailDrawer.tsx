@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { X, UserCheck, Pencil, Check, Loader2, CheckCircle2 } from 'lucide-react';
-import { usePerson, usePersonRelationships, useUpdatePerson } from '../hooks/usePerson';
+import { X, UserCheck, Pencil, Check, Loader2, CheckCircle2, Trash2 } from 'lucide-react';
+import { useDeletePerson, usePerson, usePersonRelationships, useUpdatePerson, useUploadPersonPhoto } from '../hooks/usePerson';
 import { PersonTimeline } from './PersonTimeline';
 import { RelationshipSlots } from './RelationshipSlots';
 import { AddPersonForm } from './AddPersonForm';
+import { LinkExistingPersonForm } from './LinkExistingPersonForm';
 import { DateOfBirthPicker } from '@/shared/components/DateOfBirthPicker';
 import { useCreateClaim } from '@/features/claims/hooks/useClaims';
 import { useAuth } from '@/shared/contexts/AuthContext';
@@ -32,8 +33,11 @@ export function PersonDetailDrawer({
   const { user } = useAuth();
   const createClaim = useCreateClaim();
   const updatePerson = useUpdatePerson();
+  const deletePerson = useDeletePerson();
+  const uploadPhoto = useUploadPersonPhoto();
   const [activeTab, setActiveTab] = useState<'details' | 'timeline'>('details');
   const [showAddPerson, setShowAddPerson] = useState(false);
+  const [showLinkExisting, setShowLinkExisting] = useState(false);
   const [addRelType, setAddRelType] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
@@ -72,6 +76,8 @@ export function PersonDetailDrawer({
       placeOfBirth: person.placeOfBirth ?? '',
       dateOfDeath: person.dateOfDeath ? format(new Date(person.dateOfDeath), 'yyyy-MM-dd') : '',
       gotra: person.gotra ?? '',
+      health: person.health ?? '',
+      occupation: person.occupation ?? '',
       isAlive: person.isAlive,
       bio: person.bio ?? '',
     });
@@ -87,6 +93,8 @@ export function PersonDetailDrawer({
       payload.placeOfBirth = editData.placeOfBirth || '';
     }
     if (editData.gotra !== (person.gotra ?? '')) payload.gotra = editData.gotra || null;
+    if (editData.health !== (person.health ?? '')) payload.health = editData.health || null;
+    if (editData.occupation !== (person.occupation ?? '')) payload.occupation = editData.occupation || null;
     if (editData.bio !== (person.bio ?? '')) payload.bio = editData.bio || null;
     if (editData.isAlive !== person.isAlive) payload.isAlive = editData.isAlive;
 
@@ -112,6 +120,18 @@ export function PersonDetailDrawer({
     onDone?.();
   };
 
+  const handleDelete = async () => {
+    const ok = window.confirm(`Delete ${person.firstName} ${person.lastName}? This removes this node and its relationship links.`);
+    if (!ok) return;
+    await deletePerson.mutateAsync(personId);
+    onClose();
+  };
+
+  const handlePhotoChange = async (file?: File) => {
+    if (!file) return;
+    await uploadPhoto.mutateAsync({ id: personId, file });
+  };
+
   const inputClass = 'h-8 w-full rounded border border-border bg-background px-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
 
   return (
@@ -133,14 +153,24 @@ export function PersonDetailDrawer({
                 {updatePerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               </button>
             ) : (
-              <button
-                onClick={startEditing}
-                className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-secondary"
-                aria-label="Edit details"
-              >
-                <Pencil className="h-4 w-4" />
-                Edit
-              </button>
+              <>
+                <button
+                  onClick={startEditing}
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-secondary"
+                  aria-label="Edit details"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deletePerson.isPending}
+                  className="rounded-md p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  aria-label="Delete node"
+                >
+                  {deletePerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
+              </>
             )}
             <button onClick={onClose} className="rounded-md p-2 hover:bg-secondary" aria-label="Close">
               <X className="h-4 w-4" />
@@ -170,6 +200,31 @@ export function PersonDetailDrawer({
         <div className="flex-1 overflow-y-auto p-4 pb-24">
           {activeTab === 'details' ? (
             <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-border bg-secondary text-sm font-semibold text-muted-foreground">
+                  {person.photoKey ? (
+                    <img
+                      src={`/api/persons/${person.id}/photo`}
+                      alt={`${person.firstName} ${person.lastName}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    `${person.firstName?.[0] ?? ''}${person.lastName?.[0] ?? ''}`
+                  )}
+                </div>
+                <div>
+                  <label className="inline-flex min-h-[36px] cursor-pointer items-center rounded-md border border-border px-3 text-xs font-medium hover:bg-secondary">
+                    {uploadPhoto.isPending ? 'Uploading...' : person.photoKey ? 'Change Photo' : 'Add Photo'}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="sr-only"
+                      onChange={(event) => void handlePhotoChange(event.target.files?.[0])}
+                    />
+                  </label>
+                </div>
+              </div>
+
               {editing ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -234,6 +289,14 @@ export function PersonDetailDrawer({
                     <input className={inputClass} value={editData.gotra} onChange={(e) => setEditData({ ...editData, gotra: e.target.value })} />
                   </div>
                   <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Occupation</label>
+                    <input className={inputClass} value={editData.occupation} onChange={(e) => setEditData({ ...editData, occupation: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Health</label>
+                    <input className={inputClass} value={editData.health} onChange={(e) => setEditData({ ...editData, health: e.target.value })} />
+                  </div>
+                  <div>
                     <label className="mb-1 block text-xs text-muted-foreground">Bio</label>
                     <textarea
                       className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -285,6 +348,14 @@ export function PersonDetailDrawer({
                         <p>{person.gotra}</p>
                       </div>
                     )}
+                    <div>
+                      <span className="text-muted-foreground">Occupation</span>
+                      <p>{person.occupation || 'Not added'}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Health</span>
+                      <p>{person.health || 'Not added'}</p>
+                    </div>
                   </div>
 
                   {!person.placeOfBirth && (
@@ -328,6 +399,7 @@ export function PersonDetailDrawer({
                   personFirstName={person.firstName}
                   relationships={relationships}
                   onAddFromSlot={handleAddFromSlot}
+                  onLinkExisting={() => setShowLinkExisting(true)}
                   onSelectPerson={onSelectPerson}
                   onNavigateToFamily={onNavigateToFamily}
                 />
@@ -366,6 +438,15 @@ export function PersonDetailDrawer({
             setShowAddPerson(false);
             setAddRelType(null);
           }}
+        />
+      )}
+
+      {showLinkExisting && (
+        <LinkExistingPersonForm
+          treeSlug={treeSlug}
+          personId={personId}
+          relationships={relationships}
+          onClose={() => setShowLinkExisting(false)}
         />
       )}
     </div>

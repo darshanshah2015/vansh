@@ -43,8 +43,36 @@ export function useUpdatePerson() {
       api.patch<{ data: any }>(`/api/persons/${id}`, data),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['person', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['person', variables.id, 'relationships'] });
       queryClient.invalidateQueries({ queryKey: ['tree'] });
       queryClient.invalidateQueries({ queryKey: ['trees'] });
+    },
+  });
+}
+
+export function useDeletePerson() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/persons/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['person'] });
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
+      queryClient.invalidateQueries({ queryKey: ['trees'] });
+    },
+  });
+}
+
+export function useUploadPersonPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('photo', file);
+      return api.upload<{ data: any }>(`/api/persons/${id}/photo`, formData);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['person', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
     },
   });
 }
@@ -55,6 +83,7 @@ export function useAddRelationship(slug: string) {
     mutationFn: (data: any) => api.post<{ data: any }>(`/api/trees/${slug}/relationships`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tree', slug, 'persons'] });
+      queryClient.invalidateQueries({ queryKey: ['person'] });
     },
   });
 }
@@ -65,6 +94,7 @@ export function useRemoveRelationship() {
     mutationFn: (id: string) => api.delete(`/api/relationships/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tree'] });
+      queryClient.invalidateQueries({ queryKey: ['person'] });
     },
   });
 }

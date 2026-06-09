@@ -119,6 +119,14 @@ export function renderPersonCard(
   // Initials circle
   const circleX = -CARD_W / 2 + 28;
   const circleY = -10;
+  const photoClipId = `photo-clip-${person.id}`;
+  g.append('clipPath')
+    .attr('id', photoClipId)
+    .append('circle')
+    .attr('cx', circleX)
+    .attr('cy', circleY)
+    .attr('r', 18);
+
   g.append('circle')
     .attr('cx', circleX)
     .attr('cy', circleY)
@@ -128,16 +136,28 @@ export function renderPersonCard(
     .attr('stroke-width', 1.5)
     .attr('opacity', opacity);
 
-  g.append('text')
-    .attr('x', circleX)
-    .attr('y', circleY)
-    .attr('text-anchor', 'middle')
-    .attr('dominant-baseline', 'central')
-    .attr('font-size', '11px')
-    .attr('font-weight', '600')
-    .attr('fill', accent)
-    .attr('opacity', opacity)
-    .text(`${person.firstName[0] ?? ''}${person.lastName[0] ?? ''}`);
+  if (person.photoKey) {
+    g.append('image')
+      .attr('x', circleX - 18)
+      .attr('y', circleY - 18)
+      .attr('width', 36)
+      .attr('height', 36)
+      .attr('href', `/api/persons/${person.id}/photo`)
+      .attr('clip-path', `url(#${photoClipId})`)
+      .attr('preserveAspectRatio', 'xMidYMid slice')
+      .attr('opacity', opacity);
+  } else {
+    g.append('text')
+      .attr('x', circleX)
+      .attr('y', circleY)
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .attr('fill', accent)
+      .attr('opacity', opacity)
+      .text(`${person.firstName[0] ?? ''}${person.lastName[0] ?? ''}`);
+  }
 
   // Full name
   const textX = -CARD_W / 2 + 54;
@@ -169,9 +189,19 @@ export function renderPersonCard(
       .text(span);
   }
 
+  if (person.occupation) {
+    g.append('text')
+      .attr('x', textX)
+      .attr('y', 14)
+      .attr('font-size', '10px')
+      .attr('fill', '#4B5563')
+      .attr('opacity', opacity)
+      .text(person.occupation.length > 24 ? `${person.occupation.slice(0, 23)}...` : person.occupation);
+  }
+
   g.append('text')
     .attr('x', textX)
-    .attr('y', 28)
+    .attr('y', person.occupation ? 34 : 28)
     .attr('font-size', '10px')
     .attr('fill', person.placeOfBirth ? '#4B5563' : '#9CA3AF')
     .attr('opacity', opacity)

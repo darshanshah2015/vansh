@@ -1,4 +1,4 @@
-import { eq, and, count, desc } from 'drizzle-orm';
+import { eq, and, count, desc, or } from 'drizzle-orm';
 import { db } from '@db/index';
 import { persons, relationships, treeMembers, trees, deletionRequests, auditLogs, users } from '@db/schema/index';
 import { NotFoundError, ForbiddenError } from '../../../shared/errors/index';
@@ -30,6 +30,8 @@ export async function addPerson(
     placeOfBirth?: string;
     dateOfDeath?: Date;
     gotra?: string;
+    health?: string;
+    occupation?: string;
     phone?: string;
     email?: string;
     bio?: string;
@@ -56,6 +58,8 @@ export async function addPerson(
       dateOfDeath: data.dateOfDeath ?? null,
       isAlive,
       gotra: data.gotra ?? null,
+      health: data.health ?? null,
+      occupation: data.occupation ?? null,
       phone: data.phone ?? null,
       email: data.email ?? null,
       bio: data.bio ?? null,
@@ -119,7 +123,10 @@ export async function updatePerson(
     dateOfBirth: Date;
     placeOfBirth: string;
     dateOfDeath: Date;
+    isAlive: boolean;
     gotra: string;
+    health: string;
+    occupation: string;
     phone: string;
     email: string;
     bio: string;
@@ -155,6 +162,39 @@ export async function updatePerson(
   });
 
   return updated;
+}
+
+export async function deletePerson(personId: string, userId: string) {
+  const [person] = await db.select().from(persons).where(eq(persons.id, personId)).limit(1);
+  if (!person) throw new NotFoundError('Person', personId);
+
+  await verifyTreeMember(person.treeId, userId);
+
+  const [tree] = await db.select().from(trees).where(eq(trees.id, person.treeId)).limit(1);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(relationships)
+      .where(or(eq(relationships.personId1, personId), eq(relationships.personId2, personId)));
+    await tx.delete(persons).where(eq(persons.id, personId));
+
+    if (tree) {
+      await tx
+        .update(trees)
+        .set({ memberCount: Math.max(0, tree.memberCount - 1) })
+        .where(eq(trees.id, tree.id));
+    }
+  });
+
+  await auditService.logChange({
+    treeId: person.treeId,
+    personId,
+    userId,
+    action: 'delete',
+    entityType: 'person',
+    entityId: personId,
+    oldValue: person,
+  });
 }
 
 export async function getPerson(personId: string) {

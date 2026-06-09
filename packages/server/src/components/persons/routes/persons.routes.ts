@@ -40,6 +40,7 @@ personRoutes.patch(
   validateBody(updatePersonSchema),
   personsController.updatePerson
 );
+personRoutes.delete('/persons/:id', requireAuth, personsController.deletePerson);
 personRoutes.post(
   '/persons/:id/delete-request',
   requireAuth,

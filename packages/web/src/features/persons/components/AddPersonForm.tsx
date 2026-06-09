@@ -11,7 +11,7 @@ const genderOptions = [
   { value: 'female', label: 'Female' },
   { value: 'other', label: 'Other' },
 ] as const;
-import { useAddPerson, useAddRelationship, usePersonRelationships } from '../hooks/usePerson';
+import { useAddPerson, useAddRelationship, usePersonRelationships, useUploadPersonPhoto } from '../hooks/usePerson';
 import { ApiError } from '@/shared/services/api';
 
 const personSchema = z.object({
@@ -20,6 +20,8 @@ const personSchema = z.object({
   gender: z.enum(['male', 'female', 'other']),
   dateOfBirth: z.string().optional(),
   placeOfBirth: z.string().optional(),
+  health: z.string().optional(),
+  occupation: z.string().optional(),
   gotra: z.string().optional(),
 });
 
@@ -46,8 +48,10 @@ export function AddPersonForm({
 }: AddPersonFormProps) {
   const addPerson = useAddPerson(treeSlug);
   const addRelationship = useAddRelationship(treeSlug);
+  const uploadPhoto = useUploadPersonPhoto();
   const { data: existingRels } = usePersonRelationships(relatedPersonId ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const {
     register,
@@ -90,7 +94,7 @@ export function AddPersonForm({
             relData = null; // Already handled
           } else {
             // No parents found — can't add sibling without shared parents
-            throw new Error('Cannot add sibling: no parents found for this person');
+            throw new Error('Add a parent first, then siblings can be linked through that parent.');
           }
         } else {
           // Spouse or other: existing person → new person
@@ -100,6 +104,11 @@ export function AddPersonForm({
         if (relData) {
           await addRelationship.mutateAsync(relData);
         }
+      }
+
+      if (photoFile) {
+        const newPersonId = (result as any).data.id;
+        await uploadPhoto.mutateAsync({ id: newPersonId, file: photoFile });
       }
 
       onClose();
@@ -223,12 +232,52 @@ export function AddPersonForm({
             />
           </div>
 
+          <div>
+            <label htmlFor="ap-occupation" className="mb-1 block text-xs font-medium">
+              Occupation
+            </label>
+            <input
+              id="ap-occupation"
+              type="text"
+              autoComplete="off"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...register('occupation')}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ap-health" className="mb-1 block text-xs font-medium">
+              Health
+            </label>
+            <input
+              id="ap-health"
+              type="text"
+              autoComplete="off"
+              placeholder="Optional notes"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...register('health')}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="ap-photo" className="mb-1 block text-xs font-medium">
+              Photo
+            </label>
+            <input
+              id="ap-photo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground"
+            />
+          </div>
+
           <button
             type="submit"
-            disabled={addPerson.isPending}
+            disabled={addPerson.isPending || uploadPhoto.isPending}
             className="flex h-11 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {addPerson.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
+            {addPerson.isPending || uploadPhoto.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : submitLabel}
           </button>
         </form>
       </div>

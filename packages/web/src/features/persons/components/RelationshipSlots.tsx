@@ -6,6 +6,7 @@ interface RelationshipSlotsProps {
   personFirstName?: string;
   relationships: any;
   onAddFromSlot: (relType: string) => void;
+  onLinkExisting?: () => void;
   onSelectPerson?: (personId: string) => void;
   onNavigateToFamily?: (personId: string) => void;
 }
@@ -15,6 +16,7 @@ export function RelationshipSlots({
   personFirstName,
   relationships,
   onAddFromSlot,
+  onLinkExisting,
   onSelectPerson,
   onNavigateToFamily,
 }: RelationshipSlotsProps) {
@@ -56,6 +58,16 @@ export function RelationshipSlots({
         >
           <ExternalLink className="h-3.5 w-3.5" />
           {personFirstName ? `${personFirstName}'s Family` : 'View Family'}
+        </button>
+      )}
+      {onLinkExisting && (
+        <button
+          type="button"
+          onClick={onLinkExisting}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+        >
+          <Plus className="h-4 w-4" />
+          Link Existing Member
         </button>
       )}
       {sections.map((section) => (

@@ -40,7 +40,7 @@ export function DateOfBirthPicker({ value, onChange }: DateOfBirthPickerProps) {
 
   const years = useMemo(() => {
     const arr: number[] = [];
-    for (let y = currentYear; y >= 1900; y--) arr.push(y);
+    for (let y = currentYear; y >= 1800; y--) arr.push(y);
     return arr;
   }, [currentYear]);
 

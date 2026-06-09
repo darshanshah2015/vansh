@@ -28,6 +28,8 @@ export const persons = pgTable(
     dateOfDeath: timestamp('date_of_death', { withTimezone: true, mode: 'date' }),
     isAlive: boolean('is_alive').notNull().default(true),
     gotra: varchar('gotra', { length: 100 }),
+    health: varchar('health', { length: 255 }),
+    occupation: varchar('occupation', { length: 255 }),
     phone: varchar('phone', { length: 20 }),
     email: varchar('email', { length: 255 }),
     photoKey: varchar('photo_key', { length: 255 }),
