@@ -16,8 +16,8 @@ import { ApiError } from '@/shared/services/api';
 
 const personSchema = z.object({
   firstName: z.string().min(1, 'Required'),
-  lastName: z.string().min(1, 'Required'),
-  gender: z.enum(['male', 'female', 'other']),
+  lastName: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
   dateOfBirth: z.string().optional(),
   placeOfBirth: z.string().optional(),
   health: z.string().optional(),
@@ -65,6 +65,8 @@ export function AddPersonForm({
     try {
       const result = await addPerson.mutateAsync({
         ...data,
+        lastName: data.lastName?.trim() || '',
+        gender: data.gender || 'other',
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : undefined,
       });
 
@@ -79,7 +81,7 @@ export function AddPersonForm({
           // Existing person is parent, new person is child
           relData = { personId1: relatedPersonId, personId2: newPersonId, relationshipType: 'parent_child' };
         } else if (prefilledRelType === 'add_sibling') {
-          // Add the new person as a child of the existing person's parents
+          // Prefer shared parents; if parents are unknown, keep a direct sibling link.
           const parentRels = (existingRels?.direct ?? []).filter(
             (r: any) => r.relationshipType === 'parent_child' && r.personId2 === relatedPersonId
           );
@@ -93,8 +95,11 @@ export function AddPersonForm({
             }
             relData = null; // Already handled
           } else {
-            // No parents found — can't add sibling without shared parents
-            throw new Error('Add a parent first, then siblings can be linked through that parent.');
+            relData = {
+              personId1: relatedPersonId,
+              personId2: newPersonId,
+              relationshipType: 'half_sibling',
+            };
           }
         } else {
           // Spouse or other: existing person → new person
@@ -138,7 +143,7 @@ export function AddPersonForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="ap-firstName" className="mb-1 block text-xs font-medium">
-                First name
+                Name
               </label>
               <input
                 id="ap-firstName"
@@ -153,7 +158,7 @@ export function AddPersonForm({
             </div>
             <div>
               <label htmlFor="ap-lastName" className="mb-1 block text-xs font-medium">
-                Last name
+                Family or surname
               </label>
               <input
                 id="ap-lastName"
@@ -179,7 +184,7 @@ export function AddPersonForm({
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => field.onChange(opt.value)}
+                      onClick={() => field.onChange(field.value === opt.value ? undefined : opt.value)}
                       className={cn(
                         'flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors',
                         field.value === opt.value
@@ -193,6 +198,9 @@ export function AddPersonForm({
                 </div>
               )}
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Optional. Leave blank if unknown.
+            </p>
           </div>
 
           <div>

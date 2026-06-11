@@ -53,10 +53,18 @@ export function useUpdatePerson() {
 export function useDeletePerson() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/api/persons/${id}`),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: string; treeSlug?: string }) => api.delete(`/api/persons/${id}`),
+    onSuccess: (_data, variables) => {
+      queryClient.removeQueries({ queryKey: ['person', variables.id] });
+      queryClient.removeQueries({ queryKey: ['person', variables.id, 'relationships'] });
       queryClient.invalidateQueries({ queryKey: ['person'] });
-      queryClient.invalidateQueries({ queryKey: ['tree'] });
+      if (variables.treeSlug) {
+        queryClient.invalidateQueries({ queryKey: ['tree', variables.treeSlug] });
+        queryClient.invalidateQueries({ queryKey: ['tree', variables.treeSlug, 'persons'] });
+        queryClient.invalidateQueries({ queryKey: ['tree', variables.treeSlug, 'stats'] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['tree'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['trees'] });
     },
   });

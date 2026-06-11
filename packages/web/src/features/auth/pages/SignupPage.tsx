@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/shared/contexts/AuthContext';
 import { ApiError } from '@/shared/services/api';
+import { BackButton } from '@/shared/components/BackButton';
 
 const signupSchema = z
   .object({
@@ -69,7 +70,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6">
+    <div className="relative flex min-h-screen flex-col items-center justify-center p-6">
+      <BackButton fallback="/" className="absolute left-4 top-4" />
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <Link to="/">

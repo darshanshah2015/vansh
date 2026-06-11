@@ -3,8 +3,8 @@ import { z } from 'zod';
 export const createPersonSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(100),
   middleName: z.string().max(100).optional(),
-  lastName: z.string().min(1, 'Last name is required').max(100),
-  gender: z.enum(['male', 'female', 'other']),
+  lastName: z.string().max(100).default(''),
+  gender: z.enum(['male', 'female', 'other']).default('other'),
   dateOfBirth: z.coerce.date().optional(),
   placeOfBirth: z.string().max(255).optional(),
   dateOfDeath: z.coerce.date().optional(),

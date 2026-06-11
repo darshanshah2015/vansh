@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Loader2, MapPin, Plus, Search, TreePine, UserRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/services/api';
+import { BackButton } from '@/shared/components/BackButton';
 
 type Step = 'welcome' | 'details' | 'existing' | 'choose';
 
@@ -235,6 +236,7 @@ export default function OnboardingWizardPage() {
   });
   const [existingFamilies, setExistingFamilies] = useState<TreeResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const showStandaloneBack = location.pathname === '/onboarding';
 
   const recommendations = useMemo(() => {
     const family = details.familyName.trim();
@@ -300,7 +302,8 @@ export default function OnboardingWizardPage() {
   };
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="relative min-h-full bg-background">
+      {showStandaloneBack && <BackButton fallback="/trees" className="absolute left-4 top-4 z-20" />}
       {step === 'welcome' && (
         <section className="mx-auto grid max-w-6xl gap-8 px-4 py-6 md:grid-cols-[0.95fr_1.05fr] md:px-8 md:py-10">
           <div className="flex flex-col justify-center">

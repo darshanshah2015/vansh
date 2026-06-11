@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { api, ApiError } from '@/shared/services/api';
+import { BackButton } from '@/shared/components/BackButton';
 
 const resetSchema = z
   .object({
@@ -59,7 +60,8 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="relative flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+        <BackButton fallback="/login" className="absolute left-4 top-4" />
         <CheckCircle className="h-12 w-12 text-primary" />
         <h1 className="text-2xl font-bold">Password Reset</h1>
         <p className="text-muted-foreground">Your password has been reset successfully.</p>
@@ -74,7 +76,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6">
+    <div className="relative flex min-h-screen flex-col items-center justify-center p-6">
+      <BackButton fallback="/login" className="absolute left-4 top-4" />
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <Link to="/">

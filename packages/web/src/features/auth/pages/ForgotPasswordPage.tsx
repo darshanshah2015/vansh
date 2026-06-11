@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { api, ApiError } from '@/shared/services/api';
+import { BackButton } from '@/shared/components/BackButton';
 
 const forgotSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -46,7 +47,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6">
+    <div className="relative flex min-h-screen flex-col items-center justify-center p-6">
+      <BackButton fallback="/login" className="absolute left-4 top-4" />
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <Link to="/">

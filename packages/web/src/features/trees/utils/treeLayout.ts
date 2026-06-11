@@ -67,6 +67,9 @@ export function buildFamilyHierarchy(
   });
   inferCoParentsAsCouples(parentsOf, spouseMap);
 
+  const siblingRels = relationships.filter((r) => ['half_sibling'].includes(r.relationshipType));
+  const siblingsOf = buildSiblingMap(siblingRels);
+
   // Find the best root: walk up from every person to find the topmost ancestor
   function getAncestorDepth(id: string, visited: Set<string>): number {
     if (visited.has(id)) return 0;
@@ -152,19 +155,66 @@ export function buildFamilyHierarchy(
     rootNode = { id: `single-${rootPerson.id}`, primary: rootPerson };
   }
 
+  const nodeHasPerson = (node: CoupleNode, personId: string): boolean =>
+    node.primary.id === personId || node.spouse?.id === personId;
+
+  const treeHasPerson = (node: CoupleNode, personId: string): boolean => {
+    if (nodeHasPerson(node, personId)) return true;
+    return node.children?.some((child) => treeHasPerson(child, personId)) ?? false;
+  };
+
+  const findParentForPerson = (node: CoupleNode, personId: string): CoupleNode | null => {
+    const child = node.children?.find((candidate) => treeHasPerson(candidate, personId));
+    if (!child) return null;
+    if (nodeHasPerson(child, personId)) return node;
+    return findParentForPerson(child, personId);
+  };
+
+  const addTopLevelBranch = (node: CoupleNode) => {
+    if (rootNode.id === 'virtual-root') {
+      if (!rootNode.children) rootNode.children = [];
+      rootNode.children.push(node);
+      return;
+    }
+    rootNode = {
+      id: 'virtual-root',
+      primary: { id: 'virtual-root', firstName: '', lastName: '', gender: 'other', isAlive: true, photoKey: null },
+      children: [rootNode, node],
+    };
+  };
+
+  const addSiblingBranch = (node: CoupleNode, siblingId: string) => {
+    if (nodeHasPerson(rootNode, siblingId)) {
+      addTopLevelBranch(node);
+      return;
+    }
+    const parent = findParentForPerson(rootNode, siblingId);
+    if (parent) {
+      if (!parent.children) parent.children = [];
+      parent.children.push(node);
+      return;
+    }
+    addTopLevelBranch(node);
+  };
+
   // Handle unplaced persons
   const unplaced = persons.filter((p) => !placed.has(p.id));
   if (unplaced.length > 0) {
-    // Separate into: parents-of-placed (should be above) vs truly disconnected (below)
+    // Separate into: parents-of-placed (should be above), siblings of placed
+    // people (same generation), and truly disconnected branches.
     const parentOfPlaced: PersonNode[] = [];
+    const siblingOfPlaced: Array<{ person: PersonNode; siblingId: string }> = [];
     const disconnected: PersonNode[] = [];
 
     for (const p of unplaced) {
       if (placed.has(p.id)) continue;
       const children = childrenOf.get(p.id);
       const isParentOfPlaced = children && [...children].some((c) => placed.has(c));
+      const linkedSiblingId = [...(siblingsOf.get(p.id) ?? [])].find((siblingId) => placed.has(siblingId));
       if (isParentOfPlaced) {
         parentOfPlaced.push(p);
+      } else if (linkedSiblingId) {
+        siblingOfPlaced.push({ person: p, siblingId: linkedSiblingId });
       } else {
         disconnected.push(p);
       }
@@ -180,19 +230,15 @@ export function buildFamilyHierarchy(
           // This person is a parent of someone in the tree but wasn't traversed
           // (e.g., in-law's parent). Add as a separate top-level branch.
           // Create a virtual root to hold both the main tree and this branch.
-          const virtualRoot: CoupleNode = {
-            id: 'virtual-root',
-            primary: { id: 'virtual-root', firstName: '', lastName: '', gender: 'other', isAlive: true, photoKey: null },
-            children: [rootNode, node],
-          };
-          // Flatten: if rootNode is already a virtual root, just add to its children
-          if (rootNode.id === 'virtual-root') {
-            rootNode.children!.push(node);
-          } else {
-            rootNode = virtualRoot;
-          }
+          addTopLevelBranch(node);
         }
       }
+    }
+
+    for (const { person, siblingId } of siblingOfPlaced) {
+      if (placed.has(person.id)) continue;
+      const node = buildNode(person.id);
+      if (node) addSiblingBranch(node, siblingId);
     }
 
     // Truly disconnected persons: add as branches
@@ -200,8 +246,7 @@ export function buildFamilyHierarchy(
       if (placed.has(p.id)) continue;
       const node = buildNode(p.id);
       if (node) {
-        if (!rootNode.children) rootNode.children = [];
-        rootNode.children.push(node);
+        addTopLevelBranch(node);
       }
     }
   }
@@ -247,6 +292,9 @@ export function buildLineageHierarchy(
   });
   inferCoParentsAsCouples(parentsOf, spouseMap);
 
+  const siblingRels = relationships.filter((r) => ['half_sibling'].includes(r.relationshipType));
+  const siblingsOf = buildSiblingMap(siblingRels);
+
   // Step 1: Walk UP to find all ancestors of the focus person
   const lineageSet = new Set<string>();
 
@@ -279,11 +327,25 @@ export function buildLineageHierarchy(
   }
 
   // Walk down from all topmost ancestors in the lineage
-  const topAncestors = [...lineageSet].filter((id) => {
+  let topAncestors = [...lineageSet].filter((id) => {
     const parents = parentsOf.get(id);
     return !parents || ![...parents].some((p) => lineageSet.has(p));
   });
   topAncestors.forEach((id) => walkDown(id));
+
+  // Direct sibling links are valid when shared parents are not known yet.
+  // Pull siblings of visible lineage members into the same generation.
+  const siblingSeed = [...lineageSet];
+  siblingSeed.forEach((id) => {
+    siblingsOf.get(id)?.forEach((siblingId) => {
+      lineageSet.add(siblingId);
+    });
+  });
+
+  topAncestors = [...lineageSet].filter((id) => {
+    const parents = parentsOf.get(id);
+    return !parents || ![...parents].some((p) => lineageSet.has(p));
+  });
 
   // Determine which spouses have parents in the DB (navigable)
   const spouseHasParents = new Set<string>();
@@ -419,4 +481,15 @@ function inferCoParentsAsCouples(
       spouseMap.set(parentB, parentA);
     }
   });
+}
+
+function buildSiblingMap(relationships: RelationshipEdge[]) {
+  const siblingsOf = new Map<string, Set<string>>();
+  relationships.forEach((relationship) => {
+    if (!siblingsOf.has(relationship.personId1)) siblingsOf.set(relationship.personId1, new Set());
+    if (!siblingsOf.has(relationship.personId2)) siblingsOf.set(relationship.personId2, new Set());
+    siblingsOf.get(relationship.personId1)!.add(relationship.personId2);
+    siblingsOf.get(relationship.personId2)!.add(relationship.personId1);
+  });
+  return siblingsOf;
 }

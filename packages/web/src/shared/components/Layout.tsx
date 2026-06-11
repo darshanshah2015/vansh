@@ -7,6 +7,7 @@ import { useAuth } from '@/shared/contexts/AuthContext';
 import { MobileBottomNav } from './MobileBottomNav';
 import { InstallPrompt } from './InstallPrompt';
 import { InstallInstructionsDialog } from './InstallInstructionsDialog';
+import { BackButton } from './BackButton';
 import { useInstallPrompt } from '@/shared/hooks/useInstallPrompt';
 import { cn } from '@/lib/utils';
 
@@ -167,13 +168,16 @@ export function Layout() {
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Header */}
         <header className="relative flex h-14 items-center justify-between border-b border-border bg-card px-4">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-md p-2 hover:bg-secondary md:hidden"
-            aria-label="Toggle menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="rounded-md p-2 hover:bg-secondary md:hidden"
+              aria-label="Toggle menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <BackButton fallback="/onboarding" className="min-h-9 px-2 sm:px-3" label="Back" />
+          </div>
           <div className="absolute left-1/2 -translate-x-1/2 md:hidden">
             <img src="/logo-text.png" alt="Vansh" className="h-7 w-auto" />
           </div>

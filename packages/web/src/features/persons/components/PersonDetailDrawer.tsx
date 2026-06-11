@@ -41,12 +41,14 @@ export function PersonDetailDrawer({
   const [addRelType, setAddRelType] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canClaim = person && !person.claimedByUserId && user;
 
   useEffect(() => {
     setEditing(false);
     setEditData({});
+    setDeleteError(null);
     setActiveTab('details');
   }, [personId]);
 
@@ -121,10 +123,17 @@ export function PersonDetailDrawer({
   };
 
   const handleDelete = async () => {
+    setDeleteError(null);
     const ok = window.confirm(`Delete ${person.firstName} ${person.lastName}? This removes this node and its relationship links.`);
     if (!ok) return;
-    await deletePerson.mutateAsync(personId);
-    onClose();
+    try {
+      await deletePerson.mutateAsync({ id: personId, treeSlug });
+      onClose();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : 'Could not delete this node. Please try again.'
+      );
+    }
   };
 
   const handlePhotoChange = async (file?: File) => {
@@ -198,6 +207,11 @@ export function PersonDetailDrawer({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 pb-24">
+          {deleteError && (
+            <div className="mb-4 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+              {deleteError}
+            </div>
+          )}
           {activeTab === 'details' ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3">

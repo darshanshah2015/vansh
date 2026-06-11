@@ -13,10 +13,28 @@ async function verifyTreeMember(treeId: string, userId: string) {
   });
   if (user?.role === 'admin') return;
 
+  const tree = await db.query.trees.findFirst({
+    where: eq(trees.id, treeId),
+  });
+  if (tree?.createdById === userId) {
+    await db
+      .insert(treeMembers)
+      .values({ treeId, userId, status: 'active' })
+      .onConflictDoNothing();
+    return;
+  }
+
   const member = await db.query.treeMembers.findFirst({
     where: and(eq(treeMembers.treeId, treeId), eq(treeMembers.userId, userId)),
   });
   if (!member) throw new ForbiddenError('You must be a verified tree member');
+}
+
+async function ensureTreeMembership(treeId: string, userId: string) {
+  await db
+    .insert(treeMembers)
+    .values({ treeId, userId, status: 'active' })
+    .onConflictDoNothing();
 }
 
 export async function addPerson(
@@ -41,7 +59,11 @@ export async function addPerson(
   const [tree] = await db.select().from(trees).where(eq(trees.slug, slug)).limit(1);
   if (!tree) throw new NotFoundError('Tree', slug);
 
-  await verifyTreeMember(tree.id, userId);
+  if (tree.memberCount === 0) {
+    await ensureTreeMembership(tree.id, userId);
+  } else {
+    await verifyTreeMember(tree.id, userId);
+  }
 
   const isAlive = !data.dateOfDeath;
 

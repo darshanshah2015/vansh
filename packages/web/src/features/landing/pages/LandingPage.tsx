@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { TreePine, Users, GitMerge, Share2 } from 'lucide-react';
+import { BackButton } from '@/shared/components/BackButton';
 
 const features = [
   {
@@ -25,6 +26,7 @@ export default function LandingPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2">
+          <BackButton fallback="/login" className="min-h-9 px-2 sm:px-3" />
           <img src="/logo.png" alt="Vansh" className="h-8 w-auto" />
         </div>
         <Link

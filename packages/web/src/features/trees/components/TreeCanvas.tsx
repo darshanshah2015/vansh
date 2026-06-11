@@ -6,6 +6,7 @@ import {
   drawParentChildLinksVertical,
   drawParentChildLinksHorizontal,
   drawRadialLink,
+  drawSiblingLink,
   CARD_W,
   CARD_H,
   COUPLE_GAP,
@@ -222,6 +223,15 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
           drawParentChildLinksVertical(linksG as any, { x: px, y: py }, childPositions);
         }
       });
+
+      relationships
+        .filter((r) => ['half_sibling'].includes(r.relationshipType))
+        .forEach((rel) => {
+          const source = personCardCenter.get(rel.personId1);
+          const target = personCardCenter.get(rel.personId2);
+          if (!source || !target) return;
+          drawSiblingLink(linksG as any, source, target, viewMode);
+        });
 
       // Draw nodes (skip virtual root)
       const nodesG = g.append('g');

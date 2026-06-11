@@ -331,7 +331,7 @@ export const PARENT_CHILD_LINK = {
 };
 
 export const SIBLING_BAR = {
-  stroke: PARENT_CHILD_LINK.stroke,
+  stroke: '#F59E0B',
   strokeWidth: 2,
   opacity: PARENT_CHILD_LINK.opacity,
   strokeDasharray: '',
@@ -495,6 +495,35 @@ export function drawRadialLink(
     .attr('stroke-width', PARENT_CHILD_LINK.strokeWidth)
     .attr('stroke-linecap', 'round')
     .attr('opacity', PARENT_CHILD_LINK.opacity);
+}
+
+export function drawSiblingLink(
+  linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  orientation: 'radial' | 'top-down' | 'left-right',
+) {
+  const sx = source.x;
+  const sy = source.y;
+  const tx = target.x;
+  const ty = target.y;
+  let pathD = `M${sx},${sy} L${tx},${ty}`;
+
+  if (orientation === 'top-down') {
+    const y = Math.max(sy, ty);
+    pathD = `M${sx},${y} H${tx}`;
+  } else if (orientation === 'left-right') {
+    const x = Math.max(sx, tx);
+    pathD = `M${x},${sy} V${ty}`;
+  }
+
+  linksG.append('path')
+    .attr('d', pathD)
+    .attr('fill', 'none')
+    .attr('stroke', SIBLING_BAR.stroke)
+    .attr('stroke-width', SIBLING_BAR.strokeWidth)
+    .attr('stroke-linecap', 'round')
+    .attr('opacity', SIBLING_BAR.opacity);
 }
 
 /**

@@ -35,7 +35,10 @@ export function RelationshipSlots({
     ...spouses.map((r: any) => (r.personId1 === personId ? r.personId2 : r.personId1)),
     ...(relationships.derivedCoParents || []),
   ];
-  const siblings = relationships.derivedSiblings || [];
+  const directSiblingIds = direct
+    .filter((r: any) => ['half_sibling'].includes(r.relationshipType))
+    .map((r: any) => (r.personId1 === personId ? r.personId2 : r.personId1));
+  const siblings = [...new Set([...(relationships.derivedSiblings || []), ...directSiblingIds])];
 
   const sections = [
     { label: 'Parents', items: parents.map((r: any) => r.personId1), relType: 'add_parent', max: 2 },
