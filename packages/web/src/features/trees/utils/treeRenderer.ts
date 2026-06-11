@@ -5,7 +5,7 @@ import type { PersonNode, CoupleNode } from './treeLayout';
 export const CARD_W = 210;
 export const CARD_H = 104;
 export const CARD_R = 8;
-export const COUPLE_GAP = 16;
+export const COUPLE_GAP = 56;
 
 // Colors
 const GENDER_ACCENT: Record<string, string> = {
@@ -352,10 +352,11 @@ export function drawParentChildLinksVertical(
   linksG: d3.Selection<SVGGElement, unknown, null, undefined>,
   parentPos: { x: number; y: number },
   childPositions: Array<{ x: number; y: number }>,
+  parentAnchorY?: number,
 ) {
   if (childPositions.length === 0) return;
 
-  const parentBottomY = parentPos.y + CARD_H / 2;
+  const parentBottomY = parentAnchorY ?? parentPos.y + CARD_H / 2;
   const midY = parentBottomY + (childPositions[0].y - CARD_H / 2 - parentBottomY) / 2;
 
   // Vertical drop from parent to midpoint
@@ -503,17 +504,22 @@ export function drawSiblingLink(
   target: { x: number; y: number },
   orientation: 'radial' | 'top-down' | 'left-right',
 ) {
-  const sx = source.x;
-  const sy = source.y;
-  const tx = target.x;
-  const ty = target.y;
+  let sx = source.x;
+  let sy = source.y;
+  let tx = target.x;
+  let ty = target.y;
   let pathD = `M${sx},${sy} L${tx},${ty}`;
 
   if (orientation === 'top-down') {
-    const y = Math.max(sy, ty);
-    pathD = `M${sx},${y} H${tx}`;
+    const leftToRight = sx <= tx;
+    sx = source.x + (leftToRight ? CARD_W / 2 : -CARD_W / 2);
+    tx = target.x - (leftToRight ? CARD_W / 2 : -CARD_W / 2);
+    pathD = `M${sx},${sy} H${tx}`;
   } else if (orientation === 'left-right') {
-    const x = Math.max(sx, tx);
+    const topToBottom = sy <= ty;
+    sy = source.y + (topToBottom ? CARD_H / 2 : -CARD_H / 2);
+    ty = target.y - (topToBottom ? CARD_H / 2 : -CARD_H / 2);
+    const x = Math.max(sx, tx) + CARD_W / 2 + 18;
     pathD = `M${x},${sy} V${ty}`;
   }
 

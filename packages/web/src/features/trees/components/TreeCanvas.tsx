@@ -90,6 +90,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
       // Couple node width for separation
       const coupleWidth = (d: d3.HierarchyNode<CoupleNode>) =>
         d.data.spouse ? CARD_W * 2 + COUPLE_GAP : CARD_W;
+      const minHorizontalGap = 96;
 
       // Node positions
       const nodePositions = new Map<string, { x: number; y: number }>();
@@ -124,11 +125,11 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
         });
       } else {
         // top-down
-        const layout = d3.tree<CoupleNode>().nodeSize([CARD_W * 2 + 80, CARD_H + 100])
+        const layout = d3.tree<CoupleNode>().nodeSize([CARD_W * 2 + COUPLE_GAP + 150, CARD_H + 130])
           .separation((a, b) => {
-            const wa = a.data.spouse ? 1.55 : 1.05;
-            const wb = b.data.spouse ? 1.55 : 1.05;
-            return ((wa + wb) / 2) * (a.parent === b.parent ? 0.95 : 1.25);
+            const wa = coupleWidth(a) / CARD_W;
+            const wb = coupleWidth(b) / CARD_W;
+            return ((wa + wb) / 2) * (a.parent === b.parent ? 1.15 : 1.5);
         });
         layout(root);
         root.descendants().forEach((d) => {
@@ -166,18 +167,66 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
             if (!parentPos || parentPos.y >= (nodePositions.get(nodeByPersonId.get(rel.personId2)?.data.id ?? '')?.y ?? parentPos.y)) return;
             parentPos.x = childX;
           });
+
+        const rows = new Map<number, d3.HierarchyNode<CoupleNode>[]>();
+        root.descendants().forEach((d) => {
+          if (isVirtual(d.data.id)) return;
+          const pos = nodePositions.get(d.data.id);
+          if (!pos) return;
+          const rowKey = Math.round(pos.y);
+          if (!rows.has(rowKey)) rows.set(rowKey, []);
+          rows.get(rowKey)!.push(d);
+        });
+
+        rows.forEach((rowNodes) => {
+          rowNodes.sort((a, b) => {
+            const ax = nodePositions.get(a.data.id)?.x ?? 0;
+            const bx = nodePositions.get(b.data.id)?.x ?? 0;
+            return ax - bx;
+          });
+
+          let previousRight: number | null = null;
+          rowNodes.forEach((node) => {
+            const pos = nodePositions.get(node.data.id);
+            if (!pos) return;
+            const halfWidth = coupleWidth(node) / 2;
+            const minLeft = previousRight === null ? pos.x - halfWidth : previousRight + minHorizontalGap;
+            const currentLeft = pos.x - halfWidth;
+            if (currentLeft < minLeft) {
+              pos.x += minLeft - currentLeft;
+            }
+            previousRight = pos.x + halfWidth;
+          });
+
+          const rowMin = Math.min(...rowNodes.map((node) => {
+            const pos = nodePositions.get(node.data.id);
+            return pos ? pos.x - coupleWidth(node) / 2 : 0;
+          }));
+          const rowMax = Math.max(...rowNodes.map((node) => {
+            const pos = nodePositions.get(node.data.id);
+            return pos ? pos.x + coupleWidth(node) / 2 : 0;
+          }));
+          const recenterBy = -(rowMin + rowMax) / 2;
+          rowNodes.forEach((node) => {
+            const pos = nodePositions.get(node.data.id);
+            if (pos) pos.x += recenterBy;
+          });
+        });
       }
 
       // Build person ID → couple center (for parent source) and individual card position (for child target)
       const personCoupleCenter = new Map<string, { x: number; y: number }>();
       const personCardCenter = new Map<string, { x: number; y: number }>();
+      const personCoupleNode = new Map<string, d3.HierarchyNode<CoupleNode>>();
       root.descendants().forEach((d) => {
         if (isVirtual(d.data.id)) return;
         const pos = nodePositions.get(d.data.id);
         if (!pos) return;
         personCoupleCenter.set(d.data.primary.id, pos);
+        personCoupleNode.set(d.data.primary.id, d);
         if (d.data.spouse) {
           personCoupleCenter.set(d.data.spouse.id, pos);
+          personCoupleNode.set(d.data.spouse.id, d);
           personCardCenter.set(d.data.primary.id, { x: pos.x - cardOffset, y: pos.y });
           personCardCenter.set(d.data.spouse.id, { x: pos.x + cardOffset, y: pos.y });
         } else {
@@ -192,6 +241,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
 
       // Group: "parentCoupleKey" → Set of child card positions
       const parentToChildren = new Map<string, Set<string>>();
+      const parentKeyHasSpouse = new Map<string, boolean>();
       const posKey = (p: { x: number; y: number }) => `${p.x},${p.y}`;
 
       parentChildRels.forEach((rel) => {
@@ -203,6 +253,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
         if (pk === ck) return; // Same couple node, skip
         if (!parentToChildren.has(pk)) parentToChildren.set(pk, new Set());
         parentToChildren.get(pk)!.add(ck);
+        parentKeyHasSpouse.set(pk, Boolean(personCoupleNode.get(rel.personId1)?.data.spouse));
       });
 
       // Draw T-junction for each parent → children group
@@ -220,7 +271,12 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
         } else if (viewMode === 'left-right') {
           drawParentChildLinksHorizontal(linksG as any, { x: px, y: py }, childPositions, CARD_W);
         } else {
-          drawParentChildLinksVertical(linksG as any, { x: px, y: py }, childPositions);
+          drawParentChildLinksVertical(
+            linksG as any,
+            { x: px, y: py },
+            childPositions,
+            parentKeyHasSpouse.get(parentKey) ? py : undefined
+          );
         }
       });
 
@@ -267,7 +323,7 @@ export const TreeCanvas = forwardRef<TreeCanvasHandle, TreeCanvasProps>(
           height / (bounds.height + padding * 2),
           1.5
         );
-        const minReadableScale = width >= 700 ? 0.68 : 0.42;
+        const minReadableScale = width >= 700 ? 0.5 : 0.34;
         const scale = Math.min(Math.max(fittedScale, minReadableScale), 1.5);
         const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
         const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
