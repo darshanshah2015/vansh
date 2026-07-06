@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { validateBody } from '../../../middleware/validate.middleware';
 import { requireAuth } from '../../../middleware/auth.middleware';
+import { asyncHandler } from '../../../middleware/async.middleware';
 import {
   createPersonSchema,
   updatePersonSchema,
@@ -22,41 +23,41 @@ personRoutes.post(
   '/trees/:slug/persons',
   requireAuth,
   validateBody(createPersonSchema),
-  personsController.addPerson
+  asyncHandler(personsController.addPerson)
 );
-personRoutes.get('/trees/:slug/persons', personsController.listPersons);
+personRoutes.get('/trees/:slug/persons', asyncHandler(personsController.listPersons));
 personRoutes.post(
   '/trees/:slug/relationships',
   requireAuth,
   validateBody(createRelationshipSchema),
-  personsController.addRelationship
+  asyncHandler(personsController.addRelationship)
 );
 
 // Person-scoped routes
-personRoutes.get('/persons/:id', personsController.getPerson);
+personRoutes.get('/persons/:id', asyncHandler(personsController.getPerson));
 personRoutes.patch(
   '/persons/:id',
   requireAuth,
   validateBody(updatePersonSchema),
-  personsController.updatePerson
+  asyncHandler(personsController.updatePerson)
 );
-personRoutes.delete('/persons/:id', requireAuth, personsController.deletePerson);
+personRoutes.delete('/persons/:id', requireAuth, asyncHandler(personsController.deletePerson));
 personRoutes.post(
   '/persons/:id/delete-request',
   requireAuth,
   validateBody(deleteRequestSchema),
-  personsController.requestDeletion
+  asyncHandler(personsController.requestDeletion)
 );
-personRoutes.get('/persons/:id/timeline', personsController.getTimeline);
-personRoutes.get('/persons/:id/relationships', personsController.getRelationships);
-personRoutes.post('/persons/:id/claim', requireAuth, personsController.createClaim);
+personRoutes.get('/persons/:id/timeline', asyncHandler(personsController.getTimeline));
+personRoutes.get('/persons/:id/relationships', asyncHandler(personsController.getRelationships));
+personRoutes.post('/persons/:id/claim', requireAuth, asyncHandler(personsController.createClaim));
 personRoutes.post(
   '/persons/:id/photo',
   requireAuth,
   upload.single('photo'),
-  personsController.uploadPhoto
+  asyncHandler(personsController.uploadPhoto)
 );
-personRoutes.get('/persons/:id/photo', personsController.getPhoto);
+personRoutes.get('/persons/:id/photo', asyncHandler(personsController.getPhoto));
 
 // Relationship routes
-personRoutes.delete('/relationships/:id', requireAuth, personsController.removeRelationship);
+personRoutes.delete('/relationships/:id', requireAuth, asyncHandler(personsController.removeRelationship));

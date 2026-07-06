@@ -1,6 +1,16 @@
 import { eq, and, count, desc, or } from 'drizzle-orm';
 import { db } from '@db/index';
-import { persons, relationships, treeMembers, trees, deletionRequests, auditLogs, users } from '@db/schema/index';
+import {
+  persons,
+  relationships,
+  treeMembers,
+  trees,
+  deletionRequests,
+  auditLogs,
+  users,
+  claims,
+  mergeProposalMappings,
+} from '@db/schema/index';
 import { NotFoundError, ForbiddenError } from '../../../shared/errors/index';
 import * as auditService from '../../../shared/services/audit.service';
 import * as notificationService from '../../../shared/services/notification.service';
@@ -198,6 +208,14 @@ export async function deletePerson(personId: string, userId: string) {
     await tx
       .delete(relationships)
       .where(or(eq(relationships.personId1, personId), eq(relationships.personId2, personId)));
+    await tx.delete(claims).where(eq(claims.personId, personId));
+    await tx.delete(deletionRequests).where(eq(deletionRequests.personId, personId));
+    await tx.delete(mergeProposalMappings).where(eq(mergeProposalMappings.sourcePersonId, personId));
+    await tx
+      .update(mergeProposalMappings)
+      .set({ targetPersonId: null })
+      .where(eq(mergeProposalMappings.targetPersonId, personId));
+    await tx.update(auditLogs).set({ personId: null }).where(eq(auditLogs.personId, personId));
     await tx.delete(persons).where(eq(persons.id, personId));
 
     if (tree) {
